@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Add Category{% endblock %}
+
+{% block content %}
+<section>
+    <h2>Add Category</h2>
+
+    <form method="post" class="form-card">
+        <div class="form-row">
+            <label for="category_name">Category Name</label>
+            <input type="text" id="category_name" name="category_name" required>
+        </div>
+
+        <div class="form-row">
+            <label for="department">Department</label>
+            <input type="text" id="department" name="department">
+        </div>
+
+        <div class="form-row">
+            <label for="is_active">Active</label>
+            <select id="is_active" name="is_active">
+                <option value="1" selected>Yes</option>
+                <option value="0">No</option>
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit">Save Category</button>
+        </div>
+    </form>
+</section>
+{% endblock %}

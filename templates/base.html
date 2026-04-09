@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ThriftStack{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="site-bg"></div>
+    <div class="site-overlay"></div>
+
+    <div class="site-shell">
+        <header class="topbar">
+            <div class="brand-left">
+                <img src="{{ url_for('static', filename='logo.jpg') }}" alt="Beverly Bootstraps logo" class="brand-logo">
+            </div>
+
+            <div class="brand-right">
+                <h1 class="app-title">THRIFTSTACK</h1>
+            </div>
+        </header>
+
+        <nav class="main-nav">
+            <a href="{{ url_for('dashboard') }}">Dashboard</a>
+            <a href="{{ url_for('inventory') }}">Inventory</a>
+            <a href="{{ url_for('events') }}">Events</a>
+            <a href="{{ url_for('reports') }}">Reports</a>
+            <a href="{{ url_for('logout') }}">Log Out</a>
+        </nav>
+
+        <main class="page-wrap">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

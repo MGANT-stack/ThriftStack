@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Adjust Bin{% endblock %}
+
+{% block content %}
+<section class="content-panel form-panel">
+    <h2>Adjust Bin</h2>
+
+    <form method="post" class="stack-form">
+
+        <div class="form-row">
+            <label>Bin</label>
+            <select name="inventory_lot_id" required>
+                {% for lot in inventory_lots %}
+                    <option value="{{ lot.inventory_lot_id }}">
+                        {{ "%06d"|format(lot.inventory_lot_id) }} ({{ lot.quantity_on_hand }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Type</label>
+            <select name="adjustment_type">
+                <option value="adjust_up">Increase</option>
+                <option value="adjust_down">Decrease</option>
+                <option value="remove_damaged">Damaged</option>
+                <option value="remove_recycled">Recycled</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Quantity</label>
+            <input type="number" name="quantity" required>
+        </div>
+
+        <button type="submit">Submit</button>
+    </form>
+</section>
+{% endblock %}

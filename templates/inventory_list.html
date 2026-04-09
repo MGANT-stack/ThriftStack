@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Bins{% endblock %}
+
+{% block content %}
+<section class="content-panel">
+    <div class="page-header">
+        <h2>Inventory Bins</h2>
+        <div class="page-actions">
+            <a class="button-link" href="{{ url_for('add_inventory') }}">Create Bin</a>
+            <a class="button-link" href="{{ url_for('move_inventory') }}">Move Bin</a>
+            <a class="button-link" href="{{ url_for('deploy_inventory') }}">Deploy</a>
+            <a class="button-link" href="{{ url_for('adjust_inventory') }}">Adjust</a>
+        </div>
+    </div>
+
+    {% if inventory_lots %}
+        <div class="table-shell">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Bin ID</th>
+                        <th>Category</th>
+                        <th>Purpose</th>
+                        <th>Location</th>
+                        <th>Event</th>
+                        <th>Qty</th>
+                        <th>Status</th>
+                        <th>Date Added</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lot in inventory_lots %}
+                    <tr>
+                        <td>{{ "%06d"|format(lot.inventory_lot_id) }}</td>
+                        <td>{{ lot.category_name }}</td>
+                        <td>{{ lot.purpose_name }}</td>
+                        <td>{{ lot.location_name }}</td>
+                        <td>{{ lot.event_name or "" }}</td>
+                        <td>{{ lot.quantity_on_hand }}</td>
+                        <td>{{ lot.status }}</td>
+                        <td>{{ lot.date_added }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="empty-state">No bins found.</p>
+    {% endif %}
+</section>
+{% endblock %}

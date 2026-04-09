@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Move Bin{% endblock %}
+
+{% block content %}
+<section class="content-panel form-panel">
+    <h2>Move Bin</h2>
+
+    <form method="post" class="stack-form">
+
+        <div class="form-row">
+            <label>Bin</label>
+            <select name="inventory_lot_id" required>
+                <option value="">Select</option>
+                {% for lot in inventory_lots %}
+                    <option value="{{ lot.inventory_lot_id }}">
+                        {{ "%06d"|format(lot.inventory_lot_id) }} - {{ lot.category_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>To Location</label>
+            <select name="to_location_id" required>
+                <option value="">Select</option>
+                {% for l in locations %}
+                    <option value="{{ l.location_id }}">{{ l.location_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit">Move Bin</button>
+    </form>
+</section>
+{% endblock %}

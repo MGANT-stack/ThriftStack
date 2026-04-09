@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory{% endblock %}
+
+{% block content %}
+<section class="content-panel">
+    <div class="page-header">
+        <h2>Inventory</h2>
+    </div>
+
+    <div class="card-grid action-grid">
+        <a class="action-card" href="{{ url_for('inventory_list') }}">View Inventory</a>
+        <a class="action-card" href="{{ url_for('add_inventory') }}">Add Inventory</a>
+        <a class="action-card" href="{{ url_for('move_inventory') }}">Move Inventory</a>
+        <a class="action-card" href="{{ url_for('deploy_inventory') }}">Deploy Inventory</a>
+        <a class="action-card" href="{{ url_for('adjust_inventory') }}">Adjust Inventory</a>
+    </div>
+
+    <div class="summary-row">
+        <div class="summary-box">
+            <h3>Total Lots</h3>
+            <p>{{ inventory_summary.total_lots if inventory_summary else 0 }}</p>
+        </div>
+        <div class="summary-box">
+            <h3>Total Units</h3>
+            <p>{{ inventory_summary.total_units if inventory_summary else 0 }}</p>
+        </div>
+        <div class="summary-box">
+            <h3>Event Units</h3>
+            <p>{{ inventory_summary.event_units if inventory_summary else 0 }}</p>
+        </div>
+        <div class="summary-box">
+            <h3>Carryover Units</h3>
+            <p>{{ inventory_summary.carryover_units if inventory_summary else 0 }}</p>
+        </div>
+    </div>
+
+    <h3 class="section-title">Recent Inventory Activity</h3>
+
+    {% if recent_transactions %}
+        <div class="table-shell">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Category</th>
+                        <th>Qty</th>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in recent_transactions %}
+                    <tr>
+                        <td>{{ transaction.transaction_datetime }}</td>
+                        <td>{{ transaction.transaction_type }}</td>
+                        <td>{{ transaction.category_name }}</td>
+                        <td>{{ transaction.quantity }}</td>
+                        <td>{{ transaction.from_location_name or "" }}</td>
+                        <td>{{ transaction.to_location_name or "" }}</td>
+                        <td>{{ transaction.reason_note or "" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="empty-state">No recent inventory activity found.</p>
+    {% endif %}
+</section>
+{% endblock %}

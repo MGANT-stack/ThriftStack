@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Locations{% endblock %}
+
+{% block content %}
+<section>
+    <div class="page-header">
+        <h2>Locations</h2>
+        <a class="button-link" href="/locations/add">Add Location</a>
+    </div>
+
+    {% if locations %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Location Name</th>
+                    <th>Location Type</th>
+                    <th>Notes</th>
+                    <th>Active</th>
+                    <th>Created At</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for location in locations %}
+                <tr>
+                    <td>{{ location.location_id }}</td>
+                    <td>{{ location.location_name }}</td>
+                    <td>{{ location.location_type or "" }}</td>
+                    <td>{{ location.notes or "" }}</td>
+                    <td>{{ "Yes" if location.is_active == 1 else "No" }}</td>
+                    <td>{{ location.created_at }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No locations found.</p>
+    {% endif %}
+</section>
+{% endblock %}

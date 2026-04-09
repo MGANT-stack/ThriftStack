@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Reports{% endblock %}
+
+{% block content %}
+<section class="content-panel">
+    <div class="page-header">
+        <h2>Reports</h2>
+    </div>
+
+    <div class="summary-row">
+        <div class="summary-box">
+            <h3>Total Lots</h3>
+            <p>{{ report_summary.total_lots if report_summary else 0 }}</p>
+        </div>
+        <div class="summary-box">
+            <h3>Total Units</h3>
+            <p>{{ report_summary.total_units if report_summary else 0 }}</p>
+        </div>
+        <div class="summary-box">
+            <h3>Event Units</h3>
+            <p>{{ report_summary.event_units if report_summary else 0 }}</p>
+        </div>
+        <div class="summary-box">
+            <h3>Carryover Units</h3>
+            <p>{{ report_summary.carryover_units if report_summary else 0 }}</p>
+        </div>
+        <div class="summary-box">
+            <h3>Total Transactions</h3>
+            <p>{{ report_summary.total_transactions if report_summary else 0 }}</p>
+        </div>
+    </div>
+
+    <form method="get" class="stack-form report-form">
+        <div class="form-row">
+            <label for="report_type">Report Type</label>
+            <select id="report_type" name="report_type" required>
+                <option value="">Select a report</option>
+                <option value="inventory_by_category">Inventory by Category</option>
+                <option value="inventory_by_location">Inventory by Location</option>
+                <option value="inventory_by_storage_purpose">Inventory by Storage Purpose</option>
+                <option value="event_inventory">Event Inventory</option>
+                <option value="transaction_history">Transaction History</option>
+                <option value="deployment_history">Deployment History</option>
+                <option value="adjustment_history">Adjustment History</option>
+            </select>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit">Run Report</button>
+        </div>
+    </form>
+
+    {% if report_results %}
+        <div class="table-shell">
+            <table>
+                <thead>
+                    <tr>
+                        {% for column in report_columns %}
+                            <th>{{ column }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report_results %}
+                    <tr>
+                        {% for column in report_columns %}
+                            <td>{{ row[column] }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="empty-state">No report results to display.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Create Bin{% endblock %}
+
+{% block content %}
+<section class="content-panel form-panel">
+    <div class="page-header">
+        <h2>Create Bin</h2>
+    </div>
+
+    <form method="post" class="stack-form">
+
+        <div class="form-row">
+            <label>Category</label>
+            <select name="category_id" required>
+                <option value="">Select</option>
+                {% for c in categories %}
+                    <option value="{{ c.category_id }}">{{ c.category_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Storage Purpose</label>
+            <select name="storage_purpose_id" required>
+                <option value="">Select</option>
+                {% for p in storage_purposes %}
+                    <option value="{{ p.storage_purpose_id }}">{{ p.purpose_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Location</label>
+            <select name="current_location_id" required>
+                <option value="">Select</option>
+                {% for l in locations %}
+                    <option value="{{ l.location_id }}">{{ l.location_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Event (optional)</label>
+            <select name="event_id">
+                <option value="">None</option>
+                {% for e in events %}
+                    <option value="{{ e.event_id }}">{{ e.event_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Quantity</label>
+            <input type="number" name="quantity_on_hand" min="0" required>
+        </div>
+
+        <div class="form-row">
+            <label>Status</label>
+            <select name="status">
+                <option value="active" selected>Active</option>
+                <option value="archived">Archived</option>
+            </select>
+        </div>
+
+        <button type="submit">Create Bin</button>
+    </form>
+</section>
+{% endblock %}

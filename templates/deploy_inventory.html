@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Deploy Inventory{% endblock %}
+
+{% block content %}
+<section class="content-panel form-panel">
+    <h2>Deploy Inventory</h2>
+
+    <form method="post" class="stack-form">
+
+        <div class="form-row">
+            <label>Bin</label>
+            <select name="inventory_lot_id" required>
+                {% for lot in inventory_lots %}
+                    <option value="{{ lot.inventory_lot_id }}">
+                        {{ "%06d"|format(lot.inventory_lot_id) }} ({{ lot.quantity_on_hand }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Quantity</label>
+            <input type="number" name="quantity" required>
+        </div>
+
+        <div class="form-row">
+            <label>Destination</label>
+            <select name="to_location_id" required>
+                {% for l in locations %}
+                    <option value="{{ l.location_id }}">{{ l.location_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit">Deploy</button>
+    </form>
+</section>
+{% endblock %}

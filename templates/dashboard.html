@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<section class="card-grid card-grid-home">
+    <a class="feature-card" href="{{ url_for('inventory') }}">
+        <span>INVENTORY</span>
+    </a>
+
+    <a class="feature-card" href="{{ url_for('events') }}">
+        <span>EVENTS</span>
+    </a>
+
+    <a class="feature-card" href="{{ url_for('reports') }}">
+        <span>REPORTS</span>
+    </a>
+
+    <a class="feature-card logout-card" href="{{ url_for('logout') }}">
+        <span>LOG OUT</span>
+    </a>
+</section>
+{% endblock %}

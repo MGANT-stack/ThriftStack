@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Categories{% endblock %}
+
+{% block content %}
+<section>
+    <div class="page-header">
+        <h2>Categories</h2>
+        <a class="button-link" href="/categories/add">Add Category</a>
+    </div>
+
+    {% if categories %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Category Name</th>
+                    <th>Department</th>
+                    <th>Active</th>
+                    <th>Created At</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for category in categories %}
+                <tr>
+                    <td>{{ category.category_id }}</td>
+                    <td>{{ category.category_name }}</td>
+                    <td>{{ category.department or "" }}</td>
+                    <td>{{ "Yes" if category.is_active == 1 else "No" }}</td>
+                    <td>{{ category.created_at }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>No categories found.</p>
+    {% endif %}
+</section>
+{% endblock %}
