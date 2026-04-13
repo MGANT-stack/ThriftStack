@@ -7,14 +7,13 @@
     <h2>Move Bin</h2>
 
     <form method="post" class="stack-form">
-
         <div class="form-row">
             <label>Bin</label>
             <select name="inventory_lot_id" required>
                 <option value="">Select</option>
                 {% for lot in inventory_lots %}
                     <option value="{{ lot.inventory_lot_id }}">
-                        {{ "%06d"|format(lot.inventory_lot_id) }} - {{ lot.category_name }}
+                        {{ lot.bin_number }} - {{ lot.category_name }} ({{ lot.location_name }})
                     </option>
                 {% endfor %}
             </select>
@@ -22,15 +21,49 @@
 
         <div class="form-row">
             <label>To Location</label>
-            <select name="to_location_id" required>
+            <select name="to_location_id" id="moveLocationSelect" required>
                 <option value="">Select</option>
                 {% for l in locations %}
-                    <option value="{{ l.location_id }}">{{ l.location_name }}</option>
+                    <option value="{{ l.location_id }}" data-location-name="{{ l.location_name }}">{{ l.location_name }}</option>
                 {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row" id="moveQuadrantRow" style="display:none;">
+            <label>Warehouse Quadrant</label>
+            <select name="warehouse_quadrant" id="moveQuadrantSelect">
+                <option value="">Select</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
             </select>
         </div>
 
         <button type="submit">Move Bin</button>
     </form>
 </section>
+
+<script>
+    const moveLocationSelect = document.getElementById("moveLocationSelect");
+    const moveQuadrantRow = document.getElementById("moveQuadrantRow");
+    const moveQuadrantSelect = document.getElementById("moveQuadrantSelect");
+
+    function toggleMoveQuadrant() {
+        const selected = moveLocationSelect.options[moveLocationSelect.selectedIndex];
+        const locationName = selected ? selected.dataset.locationName : "";
+
+        if (locationName === "Warehouse") {
+            moveQuadrantRow.style.display = "flex";
+            moveQuadrantSelect.required = true;
+        } else {
+            moveQuadrantRow.style.display = "none";
+            moveQuadrantSelect.required = false;
+            moveQuadrantSelect.value = "";
+        }
+    }
+
+    moveLocationSelect.addEventListener("change", toggleMoveQuadrant);
+    toggleMoveQuadrant();
+</script>
 {% endblock %}

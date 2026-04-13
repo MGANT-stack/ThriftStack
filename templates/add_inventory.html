@@ -9,6 +9,10 @@
     </div>
 
     <form method="post" class="stack-form">
+        <div class="form-row">
+            <label>Generated Bin Number</label>
+            <input type="text" name="bin_number" value="{{ next_bin_number }}" readonly>
+        </div>
 
         <div class="form-row">
             <label>Category</label>
@@ -32,11 +36,22 @@
 
         <div class="form-row">
             <label>Location</label>
-            <select name="current_location_id" required>
+            <select name="current_location_id" id="locationSelect" required>
                 <option value="">Select</option>
                 {% for l in locations %}
-                    <option value="{{ l.location_id }}">{{ l.location_name }}</option>
+                    <option value="{{ l.location_id }}" data-location-name="{{ l.location_name }}">{{ l.location_name }}</option>
                 {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row" id="quadrantRow" style="display:none;">
+            <label>Warehouse Quadrant</label>
+            <select name="warehouse_quadrant" id="quadrantSelect">
+                <option value="">Select</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
             </select>
         </div>
 
@@ -52,7 +67,7 @@
 
         <div class="form-row">
             <label>Quantity</label>
-            <input type="number" name="quantity_on_hand" min="0" required>
+            <input type="number" name="quantity_on_hand" min="1" value="1" required>
         </div>
 
         <div class="form-row">
@@ -66,4 +81,27 @@
         <button type="submit">Create Bin</button>
     </form>
 </section>
+
+<script>
+    const locationSelect = document.getElementById("locationSelect");
+    const quadrantRow = document.getElementById("quadrantRow");
+    const quadrantSelect = document.getElementById("quadrantSelect");
+
+    function toggleQuadrant() {
+        const selected = locationSelect.options[locationSelect.selectedIndex];
+        const locationName = selected ? selected.dataset.locationName : "";
+
+        if (locationName === "Warehouse") {
+            quadrantRow.style.display = "flex";
+            quadrantSelect.required = true;
+        } else {
+            quadrantRow.style.display = "none";
+            quadrantSelect.required = false;
+            quadrantSelect.value = "";
+        }
+    }
+
+    locationSelect.addEventListener("change", toggleQuadrant);
+    toggleQuadrant();
+</script>
 {% endblock %}

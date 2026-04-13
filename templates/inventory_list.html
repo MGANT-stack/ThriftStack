@@ -19,10 +19,11 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Bin ID</th>
+                        <th>Bin Number</th>
                         <th>Category</th>
                         <th>Purpose</th>
                         <th>Location</th>
+                        <th>Quadrant</th>
                         <th>Event</th>
                         <th>Qty</th>
                         <th>Status</th>
@@ -32,10 +33,11 @@
                 <tbody>
                     {% for lot in inventory_lots %}
                     <tr>
-                        <td>{{ "%06d"|format(lot.inventory_lot_id) }}</td>
+                        <td>{{ lot.bin_number }}</td>
                         <td>{{ lot.category_name }}</td>
                         <td>{{ lot.purpose_name }}</td>
                         <td>{{ lot.location_name }}</td>
+                        <td>{{ lot.warehouse_quadrant or "" }}</td>
                         <td>{{ lot.event_name or "" }}</td>
                         <td>{{ lot.quantity_on_hand }}</td>
                         <td>{{ lot.status }}</td>

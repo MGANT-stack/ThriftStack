@@ -4,36 +4,81 @@
 
 {% block content %}
 <section class="content-panel form-panel">
-    <h2>Deploy Inventory</h2>
+    <div class="page-header">
+        <h2>Deploy Inventory</h2>
+    </div>
 
-    <form method="post" class="stack-form">
-
-        <div class="form-row">
-            <label>Bin</label>
-            <select name="inventory_lot_id" required>
-                {% for lot in inventory_lots %}
-                    <option value="{{ lot.inventory_lot_id }}">
-                        {{ "%06d"|format(lot.inventory_lot_id) }} ({{ lot.quantity_on_hand }})
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
+    <form method="post" id="deployForm" class="stack-form">
+        <input type="hidden" name="action" value="add_bin">
 
         <div class="form-row">
-            <label>Quantity</label>
-            <input type="number" name="quantity" required>
+            <label>Scan / Enter Bin Number</label>
+            <input
+                type="text"
+                name="bin_number"
+                id="binInput"
+                placeholder="Enter 6-digit bin number"
+                autocomplete="off"
+                required
+            >
         </div>
-
-        <div class="form-row">
-            <label>Destination</label>
-            <select name="to_location_id" required>
-                {% for l in locations %}
-                    <option value="{{ l.location_id }}">{{ l.location_name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <button type="submit">Deploy</button>
     </form>
+
+    <h3 class="section-title">Bins to Deploy</h3>
+
+    {% if queued_bins %}
+        <div class="table-shell">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Bin Number</th>
+                        <th>Category</th>
+                        <th>Location</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bin in queued_bins %}
+                    <tr>
+                        <td>{{ bin.bin_number }}</td>
+                        <td>{{ bin.category_name }}</td>
+                        <td>{{ bin.location_name }}</td>
+                        <td>{{ bin.status }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="form-actions" style="margin-top: 16px;">
+            <form method="post" style="display:inline;">
+                <input type="hidden" name="action" value="submit_deploy">
+                <button type="submit">Submit Deployment</button>
+            </form>
+
+            <form method="post" style="display:inline;">
+                <input type="hidden" name="action" value="clear_list">
+                <button type="submit">Clear List</button>
+            </form>
+        </div>
+    {% else %}
+        <p class="empty-state">No bins added yet.</p>
+    {% endif %}
 </section>
+
+<script>
+    const input = document.getElementById("binInput");
+    const form = document.getElementById("deployForm");
+
+    window.onload = () => {
+        input.focus();
+    };
+
+    input.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            form.submit();
+        }
+    });
+</script>
 {% endblock %}
