@@ -11,18 +11,14 @@
     <div class="summary-row">
         <div class="summary-box">
             <h3>Total Bins</h3>
-            <p>{{ report_summary.total_bins if report_summary else 0 }}</p>
-        </div>
-        <div class="summary-box">
-            <h3>Total Units</h3>
             <p>{{ report_summary.total_units if report_summary else 0 }}</p>
         </div>
         <div class="summary-box">
-            <h3>Event Units</h3>
+            <h3>Event Bins</h3>
             <p>{{ report_summary.event_units if report_summary else 0 }}</p>
         </div>
         <div class="summary-box">
-            <h3>Carryover Units</h3>
+            <h3>Carryover Bins</h3>
             <p>{{ report_summary.carryover_units if report_summary else 0 }}</p>
         </div>
         <div class="summary-box">
