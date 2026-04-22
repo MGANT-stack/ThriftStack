@@ -1,5 +1,3 @@
-PRAGMA foreign_keys = ON;
-
 DROP TABLE IF EXISTS inventory_transactions;
 DROP TABLE IF EXISTS inventory_lots;
 DROP TABLE IF EXISTS events;
@@ -8,40 +6,40 @@ DROP TABLE IF EXISTS storage_purposes;
 DROP TABLE IF EXISTS categories;
 
 CREATE TABLE categories (
-    category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    category_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     category_name TEXT NOT NULL UNIQUE,
     department TEXT,
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE storage_purposes (
-    storage_purpose_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    storage_purpose_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     purpose_name TEXT NOT NULL UNIQUE,
-    is_active INTEGER NOT NULL DEFAULT 1
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
 );
 
 CREATE TABLE locations (
-    location_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    location_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     location_name TEXT NOT NULL UNIQUE,
     location_type TEXT,
     notes TEXT,
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE events (
-    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     event_name TEXT NOT NULL UNIQUE,
-    start_date TEXT,
-    end_date TEXT,
+    start_date DATE,
+    end_date DATE,
     notes TEXT,
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE inventory_lots (
-    inventory_lot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inventory_lot_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     bin_number TEXT NOT NULL UNIQUE,
     category_id INTEGER NOT NULL,
     storage_purpose_id INTEGER NOT NULL,
@@ -50,25 +48,25 @@ CREATE TABLE inventory_lots (
     event_id INTEGER,
     quantity_on_hand INTEGER NOT NULL DEFAULT 1 CHECK (quantity_on_hand >= 0),
     status TEXT NOT NULL DEFAULT 'active',
-    date_added TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    date_added TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (category_id) REFERENCES categories(category_id),
     FOREIGN KEY (storage_purpose_id) REFERENCES storage_purposes(storage_purpose_id),
     FOREIGN KEY (current_location_id) REFERENCES locations(location_id),
     FOREIGN KEY (event_id) REFERENCES events(event_id),
-    CHECK (warehouse_quadrant IN ('A', 'B', 'C', 'D', 'E', 'F') OR warehouse_quadrant IS NULL)
+    CHECK (warehouse_quadrant IN ('A', 'B', 'C', 'D') OR warehouse_quadrant IS NULL)
 );
 
 CREATE TABLE inventory_transactions (
-    transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     inventory_lot_id INTEGER NOT NULL,
     transaction_type TEXT NOT NULL,
-    quantity INTEGER,
+    quantity INTEGER NOT NULL CHECK (quantity > 0),
     from_location_id INTEGER,
     to_location_id INTEGER,
     event_id INTEGER,
     reason_note TEXT,
-    transaction_datetime TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    transaction_datetime TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (inventory_lot_id) REFERENCES inventory_lots(inventory_lot_id),
     FOREIGN KEY (from_location_id) REFERENCES locations(location_id),
     FOREIGN KEY (to_location_id) REFERENCES locations(location_id),

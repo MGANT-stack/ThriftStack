@@ -1,2 +1,4 @@
 Flask
+SQLAlchemy
+psycopg[binary]
 reportlab

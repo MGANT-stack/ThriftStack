@@ -10,16 +10,16 @@
 
     <div class="summary-row">
         <div class="summary-box">
-            <h3>Total Bins</h3>
-            <p>{{ report_summary.total_units if report_summary else 0 }}</p>
+            <h3>Active Bins</h3>
+            <p>{{ report_summary.total_bins if report_summary else 0 }}</p>
         </div>
         <div class="summary-box">
             <h3>Event Bins</h3>
-            <p>{{ report_summary.event_units if report_summary else 0 }}</p>
+            <p>{{ report_summary.event_bins if report_summary else 0 }}</p>
         </div>
         <div class="summary-box">
             <h3>Carryover Bins</h3>
-            <p>{{ report_summary.carryover_units if report_summary else 0 }}</p>
+            <p>{{ report_summary.carryover_bins if report_summary else 0 }}</p>
         </div>
         <div class="summary-box">
             <h3>Total Transactions</h3>
@@ -32,11 +32,11 @@
             <label for="report_type">Report Type</label>
             <select id="report_type" name="report_type" required>
                 <option value="">Select a report</option>
-                <option value="inventory_by_category" {% if selected_report_type == 'inventory_by_category' %}selected{% endif %}>Inventory by Category</option>
-                <option value="inventory_by_location" {% if selected_report_type == 'inventory_by_location' %}selected{% endif %}>Inventory by Location</option>
-                <option value="inventory_by_storage_purpose" {% if selected_report_type == 'inventory_by_storage_purpose' %}selected{% endif %}>Inventory by Storage Purpose</option>
-                <option value="event_inventory" {% if selected_report_type == 'event_inventory' %}selected{% endif %}>Event Inventory</option>
-                <option value="status_summary" {% if selected_report_type == 'status_summary' %}selected{% endif %}>Status Summary</option>
+                <option value="inventory_by_category" {% if selected_report_type == 'inventory_by_category' %}selected{% endif %}>Active Bins by Category</option>
+                <option value="inventory_by_location" {% if selected_report_type == 'inventory_by_location' %}selected{% endif %}>Active Bins by Location</option>
+                <option value="inventory_by_storage_purpose" {% if selected_report_type == 'inventory_by_storage_purpose' %}selected{% endif %}>Active Bins by Storage Purpose</option>
+                <option value="event_inventory" {% if selected_report_type == 'event_inventory' %}selected{% endif %}>Active Event Bins</option>
+                <option value="status_summary" {% if selected_report_type == 'status_summary' %}selected{% endif %}>Bin Status Summary</option>
                 <option value="transaction_history" {% if selected_report_type == 'transaction_history' %}selected{% endif %}>Transaction History</option>
             </select>
         </div>

@@ -156,18 +156,24 @@ body {
     gap: 10px;
 }
 
+/* only this section adjusted */
 .button-link,
 button {
     appearance: none;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     background: #222;
     color: #fff;
     text-decoration: none;
-    padding: 12px 18px;
-    font-weight: 700;
+    padding: 6px 10px;
+    font-weight: 600;
     cursor: pointer;
-    font-size: 0.98rem;
+    font-size: 0.85rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
 }
 
 .button-link:hover,
@@ -381,4 +387,34 @@ tr:last-child td {
     .content-panel {
         padding: 20px;
     }
+}
+
+/* Dashboard buttons replace oversized feature cards */
+.dashboard-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.dashboard-button {
+    appearance: none;
+    border: none;
+    border-radius: 8px;
+    background: #222;
+    color: #fff;
+    text-decoration: none;
+    padding: 6px 10px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+}
+
+.dashboard-button:hover {
+    background: #111;
 }

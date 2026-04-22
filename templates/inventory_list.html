@@ -5,50 +5,141 @@
 {% block content %}
 <section class="content-panel">
     <div class="page-header">
-        <h2>Inventory Bins</h2>
+        <h2>Active Inventory Bins</h2>
         <div class="page-actions">
             <a class="button-link" href="{{ url_for('add_inventory') }}">Create Bin</a>
-            <a class="button-link" href="{{ url_for('move_inventory') }}">Move Bin</a>
-            <a class="button-link" href="{{ url_for('deploy_inventory') }}">Deploy</a>
-            <a class="button-link" href="{{ url_for('adjust_inventory') }}">Adjust</a>
         </div>
     </div>
 
-    {% if inventory_lots %}
-        <div class="table-shell">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Bin Number</th>
-                        <th>Category</th>
-                        <th>Purpose</th>
-                        <th>Location</th>
-                        <th>Quadrant</th>
-                        <th>Event</th>
-                        <th>Qty</th>
-                        <th>Status</th>
-                        <th>Date Added</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for lot in inventory_lots %}
-                    <tr>
-                        <td>{{ lot.bin_number }}</td>
-                        <td>{{ lot.category_name }}</td>
-                        <td>{{ lot.purpose_name }}</td>
-                        <td>{{ lot.location_name }}</td>
-                        <td>{{ lot.warehouse_quadrant or "" }}</td>
-                        <td>{{ lot.event_name or "" }}</td>
-                        <td>{{ lot.quantity_on_hand }}</td>
-                        <td>{{ lot.status }}</td>
-                        <td>{{ lot.date_added }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <form method="get" class="stack-form report-form">
+        <div class="form-row">
+            <label for="search">Search Bins</label>
+            <input
+                type="text"
+                id="search"
+                name="search"
+                value="{{ search }}"
+                placeholder="Search by bin number, category, event, or purpose"
+            >
         </div>
-    {% else %}
-        <p class="empty-state">No bins found.</p>
-    {% endif %}
+
+        <div class="form-actions">
+            <button type="submit">Search</button>
+            <a class="button-link" href="{{ url_for('inventory_list') }}">Clear</a>
+        </div>
+    </form>
+
+    <form method="post">
+        <input type="hidden" name="search" value="{{ search }}">
+
+        <div class="form-actions" style="margin-bottom: 16px; gap: 8px;">
+            <button type="submit" name="action" value="deplete">Mark Selected Depleted</button>
+            <button type="submit" name="action" value="delete">Delete Selected</button>
+
+            <select name="to_location_id" id="bulkMoveLocation" style="max-width: 180px;">
+                <option value="">Move To...</option>
+                {% for location in locations %}
+                    <option value="{{ location.location_id }}" data-location-name="{{ location.location_name }}">
+                        {{ location.location_name }}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <select name="warehouse_quadrant" id="bulkMoveQuadrant" style="display:none; max-width: 130px;">
+                <option value="">Quadrant</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+            </select>
+
+            <button type="submit" name="action" value="move">Move Selected</button>
+        </div>
+
+        {% if inventory_lots %}
+            <div class="table-shell">
+                <table>
+                    <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAll"></th>
+                                <th>Bin Number</th>
+                                <th>Category</th>
+                                <th>Purpose</th>
+                                <th>Location</th>
+                                <th>Quadrant</th>
+                                <th>Event</th>
+                                <th>Status</th>
+                                <th>Date Added</th>
+                            </tr>
+                        </thead>
+                    <tbody>
+                        {% for lot in inventory_lots %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" name="selected_bins" value="{{ lot.inventory_lot_id }}">
+                            </td>
+                            <td>{{ lot.bin_number }}</td>
+                            <td>{{ lot.category_name }}</td>
+                            <td>{{ lot.purpose_name }}</td>
+                            <td>{{ lot.location_name }}</td>
+                            <td>{{ lot.warehouse_quadrant or "" }}</td>
+                            <td>{{ lot.event_name or "" }}</td>
+                            <td>{{ lot.status }}</td>
+                            <td>{{ lot.date_added }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="empty-state">No active bins found.</p>
+        {% endif %}
+    </form>
 </section>
+
+<script>
+    const bulkMoveLocation = document.getElementById("bulkMoveLocation");
+    const bulkMoveQuadrant = document.getElementById("bulkMoveQuadrant");
+
+    function toggleBulkQuadrant() {
+        const selected = bulkMoveLocation.options[bulkMoveLocation.selectedIndex];
+        const locationName = selected ? selected.dataset.locationName : "";
+
+        if (locationName === "Warehouse") {
+            bulkMoveQuadrant.style.display = "inline-flex";
+            bulkMoveQuadrant.required = true;
+        } else {
+            bulkMoveQuadrant.style.display = "none";
+            bulkMoveQuadrant.required = false;
+            bulkMoveQuadrant.value = "";
+        }
+    }
+
+    bulkMoveLocation.addEventListener("change", toggleBulkQuadrant);
+    toggleBulkQuadrant();
+</script>
+
+<script>
+    const selectAll = document.getElementById("selectAll");
+    const checkboxes = document.querySelectorAll('input[name="selected_bins"]');
+
+    selectAll.addEventListener("change", function () {
+        checkboxes.forEach(cb => {
+            cb.checked = this.checked;
+        });
+    });
+
+    // Optional: if user unchecks one, uncheck "select all"
+    checkboxes.forEach(cb => {
+        cb.addEventListener("change", function () {
+            if (!this.checked) {
+                selectAll.checked = false;
+            } else {
+                const allChecked = [...checkboxes].every(c => c.checked);
+                selectAll.checked = allChecked;
+            }
+        });
+    });
+</script>
+
 {% endblock %}

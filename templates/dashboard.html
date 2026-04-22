@@ -3,21 +3,108 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-<section class="card-grid card-grid-home">
-    <a class="feature-card" href="{{ url_for('inventory') }}">
-        <span>INVENTORY</span>
-    </a>
 
-    <a class="feature-card" href="{{ url_for('events') }}">
-        <span>EVENTS</span>
-    </a>
+<section class="content-panel form-panel" style="margin-top: 24px;">
+    <div class="page-header">
+        <h2>Quick Bin</h2>
+    </div>
 
-    <a class="feature-card" href="{{ url_for('reports') }}">
-        <span>REPORTS</span>
-    </a>
+    <div class="summary-row">
+        <div class="summary-box">
+            <h3>Active Bins</h3>
+            <p>{{ summary.total_bins if summary else 0 }}</p>
+        </div>
+        <div class="summary-box">
+            <h3>Event Bins</h3>
+            <p>{{ summary.event_bins if summary else 0 }}</p>
+        </div>
+        <div class="summary-box">
+            <h3>Carryover Bins</h3>
+            <p>{{ summary.carryover_bins if summary else 0 }}</p>
+        </div>
+    </div>
 
-    <a class="feature-card logout-card" href="{{ url_for('logout') }}">
-        <span>LOG OUT</span>
-    </a>
+    <form method="post" action="{{ url_for('quick_add_inventory') }}" class="stack-form">
+        <div class="form-row">
+            <label>Generated Bin Number</label>
+            <input type="text" name="bin_number" value="{{ next_bin_number }}" readonly>
+        </div>
+
+        <div class="form-row">
+            <label>Category</label>
+            <select name="category_id" required>
+                <option value="">Select</option>
+                {% for c in categories %}
+                    <option value="{{ c.category_id }}">{{ c.category_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Storage Purpose</label>
+            <select name="storage_purpose_id" required>
+                <option value="">Select</option>
+                {% for p in storage_purposes %}
+                    <option value="{{ p.storage_purpose_id }}">{{ p.purpose_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Location</label>
+            <select name="current_location_id" id="quickLocationSelect" required>
+                <option value="">Select</option>
+                {% for l in locations %}
+                    <option value="{{ l.location_id }}" data-location-name="{{ l.location_name }}">{{ l.location_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row" id="quickQuadrantRow" style="display:none;">
+            <label>Warehouse Quadrant</label>
+            <select name="warehouse_quadrant" id="quickQuadrantSelect">
+                <option value="">Select</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="D">D</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>Event (optional)</label>
+            <select name="event_id">
+                <option value="">None</option>
+                {% for e in events %}
+                    <option value="{{ e.event_id }}">{{ e.event_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit">Create Quick Bin</button>
+    </form>
 </section>
+
+<script>
+    const quickLocationSelect = document.getElementById("quickLocationSelect");
+    const quickQuadrantRow = document.getElementById("quickQuadrantRow");
+    const quickQuadrantSelect = document.getElementById("quickQuadrantSelect");
+
+    function toggleQuickQuadrant() {
+        const selected = quickLocationSelect.options[quickLocationSelect.selectedIndex];
+        const locationName = selected ? selected.dataset.locationName : "";
+
+        if (locationName === "Warehouse") {
+            quickQuadrantRow.style.display = "flex";
+            quickQuadrantSelect.required = true;
+        } else {
+            quickQuadrantRow.style.display = "none";
+            quickQuadrantSelect.required = false;
+            quickQuadrantSelect.value = "";
+        }
+    }
+
+    quickLocationSelect.addEventListener("change", toggleQuickQuadrant);
+    toggleQuickQuadrant();
+</script>
 {% endblock %}

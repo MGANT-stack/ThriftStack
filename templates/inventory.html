@@ -8,12 +8,11 @@
         <h2>Inventory</h2>
     </div>
 
-    <div class="card-grid action-grid">
-        <a class="action-card" href="{{ url_for('inventory_list') }}">View Inventory</a>
-        <a class="action-card" href="{{ url_for('add_inventory') }}">Add Inventory</a>
-        <a class="action-card" href="{{ url_for('move_inventory') }}">Move Inventory</a>
-        <a class="action-card" href="{{ url_for('deploy_inventory') }}">Deploy Inventory</a>
-        <a class="action-card" href="{{ url_for('adjust_inventory') }}">Adjust Inventory</a>
+<div class="card-grid action-grid">
+    <a class="action-card" href="{{ url_for('inventory_list') }}">Manage Inventory</a>
+    <a class="action-card" href="{{ url_for('add_inventory') }}">Create Bin</a>
+</div>
+
     </div>
 
     <div class="summary-row">
