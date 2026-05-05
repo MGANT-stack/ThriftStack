@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Bins{% endblock %}
+
+{% block content %}
+<section class="content-panel form-panel">
+    <div class="page-header">
+        <h2>Upload Bins</h2>
+    </div>
+
+    <p class="empty-state">
+        Required CSV columns: bin_number, category, storage_purpose, location, warehouse_quadrant, event
+    </p>
+
+    <form method="post" enctype="multipart/form-data" class="stack-form">
+        <div class="form-row">
+            <label>CSV File</label>
+            <input type="file" name="csv_file" accept=".csv" required>
+        </div>
+
+        <button type="submit">Upload Bins</button>
+    </form>
+</section>
+{% endblock %}

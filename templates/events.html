@@ -7,27 +7,23 @@
     <div class="page-header">
         <h2>Events</h2>
         <div class="page-actions">
-            <a class="button-link" href="{{ url_for('add_event') }}">Add Event</a>
+            <a class="button-link" href="{{ url_for('add_event') }}">Create Event</a>
         </div>
     </div>
 
+    <!-- Summary -->
     <div class="summary-row">
         <div class="summary-box">
             <h3>Active Events</h3>
             <p>{{ event_summary.active_events if event_summary else 0 }}</p>
         </div>
         <div class="summary-box">
-            <h3>Total Event Lots</h3>
-            <p>{{ event_summary.total_event_lots if event_summary else 0 }}</p>
-        </div>
-        <div class="summary-box">
-            <h3>Total Event Units</h3>
-            <p>{{ event_summary.total_event_units if event_summary else 0 }}</p>
+            <h3>Active Event Bins</h3>
+            <p>{{ event_summary.total_event_bins if event_summary else 0 }}</p>
         </div>
     </div>
 
-    <h3 class="section-title">Event Tallies</h3>
-
+    <!-- Event Table -->
     {% if event_tallies %}
         <div class="table-shell">
             <table>
@@ -36,9 +32,9 @@
                         <th>Event Name</th>
                         <th>Start Date</th>
                         <th>End Date</th>
-                        <th>Lots Assigned</th>
-                        <th>Units Assigned</th>
                         <th>Active</th>
+                        <th>Active Bins</th>
+                        <th>Archive</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -47,44 +43,21 @@
                         <td>{{ event.event_name }}</td>
                         <td>{{ event.start_date or "" }}</td>
                         <td>{{ event.end_date or "" }}</td>
-                        <td>{{ event.lots_assigned or 0 }}</td>
-                        <td>{{ event.units_assigned or 0 }}</td>
-                        <td>{{ "Yes" if event.is_active == 1 else "No" }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    {% else %}
-        <p class="empty-state">No event tallies available.</p>
-    {% endif %}
-
-    <h3 class="section-title">All Events</h3>
-
-    {% if events %}
-        <div class="table-shell">
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Event Name</th>
-                        <th>Start Date</th>
-                        <th>End Date</th>
-                        <th>Notes</th>
-                        <th>Active</th>
-                        <th>Created At</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for event in events %}
-                    <tr>
-                        <td>{{ event.event_id }}</td>
-                        <td>{{ event.event_name }}</td>
-                        <td>{{ event.start_date or "" }}</td>
-                        <td>{{ event.end_date or "" }}</td>
-                        <td>{{ event.notes or "" }}</td>
-                        <td>{{ "Yes" if event.is_active == 1 else "No" }}</td>
-                        <td>{{ event.created_at }}</td>
+                        <td>{{ "Yes" if event.is_active else "No" }}</td>
+                        <td>{{ event.bins_assigned }}</td>
+                        <td>
+                            <form method="post" action="{{ url_for('delete_event', event_id=event.event_id) }}">
+                                <button
+                                    type="submit"
+                                    {% if event.bins_assigned > 0 %}
+                                        disabled
+                                        title="Cannot delete event with active bins"
+                                    {% endif %}
+                                >
+                                    Delete
+                                </button>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

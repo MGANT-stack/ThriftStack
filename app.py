@@ -1,6 +1,7 @@
 import os
+import csv
 from datetime import timedelta
-from io import BytesIO
+from io import BytesIO, StringIO
 
 from flask import (
     Flask,
@@ -269,7 +270,7 @@ def login():
     error = None
 
     if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
+        username = (request.form.get("username") or "").strip().lower()
         password = request.form.get("password") or ""
 
         if username == VALID_USERNAME and password == VALID_PASSWORD:
@@ -1092,6 +1093,7 @@ def events():
             text(
                 """
                 SELECT
+                    e.event_id,
                     e.event_name,
                     e.start_date,
                     e.end_date,
@@ -1293,6 +1295,232 @@ def reports_download():
         mimetype="application/pdf",
     )
 
+
+@app.route("/inventory/upload", methods=["GET", "POST"])
+def upload_bins():
+    if request.method == "POST":
+        uploaded_file = request.files.get("csv_file")
+
+        if not uploaded_file:
+            return "No file uploaded", 400
+
+        stream = StringIO(uploaded_file.stream.read().decode("utf-8-sig"))
+        reader = csv.DictReader(stream)
+
+        required_columns = {
+            "bin_number",
+            "category",
+            "storage_purpose",
+            "location",
+            "warehouse_quadrant",
+            "event",
+        }
+
+        if not required_columns.issubset(set(reader.fieldnames or [])):
+            return "CSV is missing required columns", 400
+
+        created_count = 0
+        skipped_count = 0
+
+        with engine.begin() as conn:
+            for row in reader:
+                bin_number = (row.get("bin_number") or "").strip().zfill(6)
+                category_name = (row.get("category") or "").strip()
+                purpose_name = (row.get("storage_purpose") or "").strip()
+                location_name = (row.get("location") or "").strip()
+                quadrant = (row.get("warehouse_quadrant") or "").strip().upper() or None
+                event_name = (row.get("event") or "").strip()
+
+                if not bin_number or not category_name or not purpose_name or not location_name:
+                    skipped_count += 1
+                    continue
+
+                existing = conn.execute(
+                    text(
+                        """
+                        SELECT inventory_lot_id
+                        FROM inventory_lots
+                        WHERE bin_number = :bin_number
+                        """
+                    ),
+                    {"bin_number": bin_number},
+                ).mappings().first()
+
+                if existing:
+                    skipped_count += 1
+                    continue
+
+                category = conn.execute(
+                    text(
+                        """
+                        SELECT category_id
+                        FROM categories
+                        WHERE category_name = :category_name
+                        """
+                    ),
+                    {"category_name": category_name},
+                ).mappings().first()
+
+                purpose = conn.execute(
+                    text(
+                        """
+                        SELECT storage_purpose_id
+                        FROM storage_purposes
+                        WHERE purpose_name = :purpose_name
+                        """
+                    ),
+                    {"purpose_name": purpose_name},
+                ).mappings().first()
+
+                location = conn.execute(
+                    text(
+                        """
+                        SELECT location_id, location_name
+                        FROM locations
+                        WHERE location_name = :location_name
+                        """
+                    ),
+                    {"location_name": location_name},
+                ).mappings().first()
+
+                if not category or not purpose or not location:
+                    skipped_count += 1
+                    continue
+
+                if location["location_name"] == "Warehouse":
+                    if quadrant not in {"A", "B", "C", "D"}:
+                        skipped_count += 1
+                        continue
+                else:
+                    quadrant = None
+
+                event_id = None
+                if event_name:
+                    event = conn.execute(
+                        text(
+                            """
+                            SELECT event_id
+                            FROM events
+                            WHERE event_name = :event_name
+                            """
+                        ),
+                        {"event_name": event_name},
+                    ).mappings().first()
+
+                    if event:
+                        event_id = event["event_id"]
+                    else:
+                        event_result = conn.execute(
+                            text(
+                                """
+                                INSERT INTO events (event_name, is_active)
+                                VALUES (:event_name, TRUE)
+                                RETURNING event_id
+                                """
+                            ),
+                            {"event_name": event_name},
+                        ).mappings().first()
+                        event_id = event_result["event_id"]
+
+                result = conn.execute(
+                    text(
+                        """
+                        INSERT INTO inventory_lots (
+                            bin_number,
+                            category_id,
+                            storage_purpose_id,
+                            current_location_id,
+                            warehouse_quadrant,
+                            event_id,
+                            quantity_on_hand,
+                            status
+                        )
+                        VALUES (
+                            :bin_number,
+                            :category_id,
+                            :storage_purpose_id,
+                            :location_id,
+                            :warehouse_quadrant,
+                            :event_id,
+                            1,
+                            'active'
+                        )
+                        RETURNING inventory_lot_id
+                        """
+                    ),
+                    {
+                        "bin_number": bin_number,
+                        "category_id": category["category_id"],
+                        "storage_purpose_id": purpose["storage_purpose_id"],
+                        "location_id": location["location_id"],
+                        "warehouse_quadrant": quadrant,
+                        "event_id": event_id,
+                    },
+                ).mappings().first()
+
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO inventory_transactions (
+                            inventory_lot_id,
+                            transaction_type,
+                            quantity,
+                            from_location_id,
+                            to_location_id,
+                            event_id,
+                            reason_note
+                        )
+                        VALUES (
+                            :inventory_lot_id,
+                            'upload',
+                            1,
+                            NULL,
+                            :to_location_id,
+                            :event_id,
+                            :reason_note
+                        )
+                        """
+                    ),
+                    {
+                        "inventory_lot_id": result["inventory_lot_id"],
+                        "to_location_id": location["location_id"],
+                        "event_id": event_id,
+                        "reason_note": f"Bin {bin_number} uploaded from CSV",
+                    },
+                )
+
+                created_count += 1
+
+        return redirect(url_for("inventory_list"))
+
+    return render_template("upload_bins.html")
+
+@app.route("/events/delete/<int:event_id>", methods=["POST"])
+def delete_event(event_id):
+    with engine.begin() as conn:
+        active_bins = conn.execute(
+            text("""
+                SELECT COUNT(*) AS active_bin_count
+                FROM inventory_lots
+                WHERE event_id = :event_id
+                  AND status = 'active'
+            """),
+            {"event_id": event_id},
+        ).mappings().first()
+
+        if active_bins["active_bin_count"] > 0:
+            return "This event cannot be deleted because it still has active bins assigned.", 400
+
+        conn.execute(
+            text("""
+                UPDATE events
+                SET is_active = FALSE
+                WHERE event_id = :event_id
+            """),
+            {"event_id": event_id},
+        )
+
+    return redirect(url_for("events"))
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

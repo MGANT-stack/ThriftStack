@@ -54,7 +54,7 @@ CREATE TABLE inventory_lots (
     FOREIGN KEY (storage_purpose_id) REFERENCES storage_purposes(storage_purpose_id),
     FOREIGN KEY (current_location_id) REFERENCES locations(location_id),
     FOREIGN KEY (event_id) REFERENCES events(event_id),
-    CHECK (warehouse_quadrant IN ('A', 'B', 'C', 'D') OR warehouse_quadrant IS NULL)
+    CHECK (warehouse_quadrant IN ('A', 'B', 'C', 'D', 'E', 'F') OR warehouse_quadrant IS NULL)
 );
 
 CREATE TABLE inventory_transactions (
