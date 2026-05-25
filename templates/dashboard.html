@@ -60,9 +60,9 @@
             </select>
         </div>
 
-        <div class="form-row" id="quickQuadrantRow" style="display:none;">
-            <label>Warehouse Quadrant</label>
-            <select name="warehouse_quadrant" id="quickQuadrantSelect">
+        <div class="form-row" id="quickZoneRow" style="display:none;">
+            <label>Warehouse Zone</label>
+            <select name="warehouse_zone" id="quickZoneSelect">
                 <option value="">Select</option>
                 <option value="A">A</option>
                 <option value="B">B</option>
@@ -89,24 +89,24 @@
 
 <script>
     const quickLocationSelect = document.getElementById("quickLocationSelect");
-    const quickQuadrantRow = document.getElementById("quickQuadrantRow");
-    const quickQuadrantSelect = document.getElementById("quickQuadrantSelect");
+    const quickZoneRow = document.getElementById("quickZoneRow");
+    const quickZoneSelect = document.getElementById("quickZoneSelect");
 
-    function toggleQuickQuadrant() {
+    function toggleQuickZone() {
         const selected = quickLocationSelect.options[quickLocationSelect.selectedIndex];
         const locationName = selected ? selected.dataset.locationName : "";
 
         if (locationName === "Warehouse") {
-            quickQuadrantRow.style.display = "flex";
-            quickQuadrantSelect.required = true;
+            quickZoneRow.style.display = "flex";
+            quickZoneSelect.required = true;
         } else {
-            quickQuadrantRow.style.display = "none";
-            quickQuadrantSelect.required = false;
-            quickQuadrantSelect.value = "";
+            quickZoneRow.style.display = "none";
+            quickZoneSelect.required = false;
+            quickZoneSelect.value = "";
         }
     }
 
-    quickLocationSelect.addEventListener("change", toggleQuickQuadrant);
-    toggleQuickQuadrant();
+    quickLocationSelect.addEventListener("change", toggleQuickZone);
+    toggleQuickZone();
 </script>
 {% endblock %}

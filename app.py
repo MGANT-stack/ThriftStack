@@ -1,5 +1,5 @@
-import os
 import csv
+import os
 from datetime import timedelta
 from io import BytesIO, StringIO
 
@@ -12,257 +12,33 @@ from flask import (
     session,
     send_file,
 )
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter, landscape
+from reportlab.lib.pagesizes import landscape, letter
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
 from utils.db import engine, get_connection
 
+
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-key-change-later")
-app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=5)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=45)
 
-VALID_USERNAME = os.getenv("THRIFTSTACK_USERNAME", "thriftstack")
+VALID_USERNAME = os.getenv("THRIFTSTACK_USERNAME", "thriftstack").lower()
 VALID_PASSWORD = os.getenv("THRIFTSTACK_PASSWORD", "password")
 
+
+# ---------------------------------------------------------
+# AUTH
+# ---------------------------------------------------------
 
 @app.before_request
 def check_login():
     session.permanent = True
     if request.endpoint not in ("login", "static") and not session.get("logged_in"):
         return redirect(url_for("login"))
-
-
-def generate_next_bin_number():
-    with get_connection() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT bin_number
-                FROM inventory_lots
-                ORDER BY CAST(bin_number AS INTEGER) DESC
-                LIMIT 1
-                """
-            )
-        ).mappings().first()
-
-    if row is None or row["bin_number"] is None:
-        return "000001"
-
-    next_number = int(row["bin_number"]) + 1
-    return f"{next_number:06d}"
-
-
-def get_location_name(conn, location_id):
-    row = conn.execute(
-        text(
-            """
-            SELECT location_name
-            FROM locations
-            WHERE location_id = :location_id
-            """
-        ),
-        {"location_id": location_id},
-    ).mappings().first()
-    return row["location_name"] if row else None
-
-
-def normalize_quadrant(location_name, quadrant_value):
-    if location_name != "Warehouse":
-        return None
-
-    quadrant = (quadrant_value or "").strip().upper()
-    return quadrant if quadrant in {"A", "B", "C", "D"} else None
-
-
-def get_quick_bin_lookups():
-    with get_connection() as conn:
-        categories = conn.execute(
-            text(
-                """
-                SELECT *
-                FROM categories
-                WHERE is_active = TRUE
-                ORDER BY category_name
-                """
-            )
-        ).mappings().all()
-
-        purposes = conn.execute(
-            text(
-                """
-                SELECT *
-                FROM storage_purposes
-                WHERE is_active = TRUE
-                ORDER BY purpose_name
-                """
-            )
-        ).mappings().all()
-
-        locations = conn.execute(
-            text(
-                """
-                SELECT *
-                FROM locations
-                WHERE is_active = TRUE
-                ORDER BY location_name
-                """
-            )
-        ).mappings().all()
-
-        events = conn.execute(
-            text(
-                """
-                SELECT *
-                FROM events
-                WHERE is_active = TRUE
-                ORDER BY event_name
-                """
-            )
-        ).mappings().all()
-
-    return categories, purposes, locations, events
-
-
-def build_report_data(conn, report_type):
-    report_results = []
-    report_columns = []
-    report_title = "Reports"
-
-    if report_type == "inventory_by_category":
-        report_title = "Active Bins by Category"
-        report_results = conn.execute(
-            text(
-                """
-                SELECT
-                    c.category_name,
-                    COUNT(il.inventory_lot_id) AS bin_count
-                FROM categories c
-                LEFT JOIN inventory_lots il
-                    ON c.category_id = il.category_id
-                   AND il.status = 'active'
-                GROUP BY c.category_id, c.category_name
-                ORDER BY c.category_name
-                """
-            )
-        ).mappings().all()
-        report_columns = ["category_name", "bin_count"]
-
-    elif report_type == "inventory_by_location":
-        report_title = "Active Bins by Location"
-        report_results = conn.execute(
-            text(
-                """
-                SELECT
-                    l.location_name,
-                    COALESCE(il.warehouse_quadrant, '') AS warehouse_quadrant,
-                    COUNT(il.inventory_lot_id) AS bin_count
-                FROM locations l
-                LEFT JOIN inventory_lots il
-                    ON l.location_id = il.current_location_id
-                   AND il.status = 'active'
-                GROUP BY l.location_id, l.location_name, il.warehouse_quadrant
-                ORDER BY l.location_name, il.warehouse_quadrant
-                """
-            )
-        ).mappings().all()
-        report_columns = ["location_name", "warehouse_quadrant", "bin_count"]
-
-    elif report_type == "inventory_by_storage_purpose":
-        report_title = "Active Bins by Storage Purpose"
-        report_results = conn.execute(
-            text(
-                """
-                SELECT
-                    sp.purpose_name,
-                    COUNT(il.inventory_lot_id) AS bin_count
-                FROM storage_purposes sp
-                LEFT JOIN inventory_lots il
-                    ON sp.storage_purpose_id = il.storage_purpose_id
-                   AND il.status = 'active'
-                GROUP BY sp.storage_purpose_id, sp.purpose_name
-                ORDER BY sp.purpose_name
-                """
-            )
-        ).mappings().all()
-        report_columns = ["purpose_name", "bin_count"]
-
-    elif report_type == "event_inventory":
-        report_title = "Active Event Bins"
-        report_results = conn.execute(
-            text(
-                """
-                SELECT
-                    e.event_name,
-                    COUNT(il.inventory_lot_id) AS bin_count
-                FROM events e
-                LEFT JOIN inventory_lots il
-                    ON e.event_id = il.event_id
-                   AND il.status = 'active'
-                GROUP BY e.event_id, e.event_name
-                ORDER BY e.event_name
-                """
-            )
-        ).mappings().all()
-        report_columns = ["event_name", "bin_count"]
-
-    elif report_type == "status_summary":
-        report_title = "Bin Status Summary"
-        report_results = conn.execute(
-            text(
-                """
-                SELECT
-                    status,
-                    COUNT(*) AS bin_count
-                FROM inventory_lots
-                GROUP BY status
-                ORDER BY status
-                """
-            )
-        ).mappings().all()
-        report_columns = ["status", "bin_count"]
-
-    elif report_type == "transaction_history":
-        report_title = "Transaction History"
-        report_results = conn.execute(
-            text(
-                """
-                SELECT
-                    it.transaction_datetime,
-                    it.transaction_type,
-                    il.bin_number,
-                    c.category_name,
-                    COALESCE(fl.location_name, '') AS from_location,
-                    COALESCE(tl.location_name, '') AS to_location,
-                    COALESCE(it.reason_note, '') AS reason_note
-                FROM inventory_transactions it
-                JOIN inventory_lots il
-                    ON it.inventory_lot_id = il.inventory_lot_id
-                JOIN categories c
-                    ON il.category_id = c.category_id
-                LEFT JOIN locations fl
-                    ON it.from_location_id = fl.location_id
-                LEFT JOIN locations tl
-                    ON it.to_location_id = tl.location_id
-                ORDER BY it.transaction_datetime DESC, it.transaction_id DESC
-                LIMIT 100
-                """
-            )
-        ).mappings().all()
-        report_columns = [
-            "transaction_datetime",
-            "transaction_type",
-            "bin_number",
-            "category_name",
-            "from_location",
-            "to_location",
-            "reason_note",
-        ]
-
-    return report_title, report_columns, report_results
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -288,447 +64,263 @@ def logout():
     return redirect(url_for("login"))
 
 
-@app.route("/")
-def dashboard():
+# ---------------------------------------------------------
+# HELPERS
+# ---------------------------------------------------------
+
+def fetch_one(conn, sql, params=None):
+    return conn.execute(text(sql), params or {}).mappings().first()
+
+
+def fetch_all(conn, sql, params=None):
+    return conn.execute(text(sql), params or {}).mappings().all()
+
+
+def generate_next_bin_number():
     with get_connection() as conn:
-        summary = conn.execute(
-            text(
-                """
-                SELECT
-                    COUNT(*) AS total_bins,
-                    COALESCE(SUM(CASE WHEN sp.purpose_name = 'Event' THEN 1 ELSE 0 END), 0) AS event_bins,
-                    COALESCE(SUM(CASE WHEN sp.purpose_name = 'Carryover' THEN 1 ELSE 0 END), 0) AS carryover_bins
-                FROM inventory_lots il
-                JOIN storage_purposes sp
-                    ON il.storage_purpose_id = sp.storage_purpose_id
-                WHERE il.status = 'active'
-                """
-            )
-        ).mappings().first()
-
-    categories, purposes, locations, events = get_quick_bin_lookups()
-
-    return render_template(
-        "dashboard.html",
-        summary=summary,
-        next_bin_number=generate_next_bin_number(),
-        categories=categories,
-        storage_purposes=purposes,
-        locations=locations,
-        events=events,
-    )
-
-
-@app.route("/inventory/quick-add", methods=["POST"])
-def quick_add_inventory():
-    bin_number = request.form.get("bin_number")
-    category_id = request.form.get("category_id")
-    storage_purpose_id = request.form.get("storage_purpose_id")
-    location_id = request.form.get("current_location_id")
-    event_id = request.form.get("event_id") or None
-
-    with engine.begin() as conn:
-        location_name = get_location_name(conn, location_id)
-        warehouse_quadrant = normalize_quadrant(
-            location_name, request.form.get("warehouse_quadrant")
+        row = fetch_one(
+            conn,
+            """
+            SELECT bin_number
+            FROM inventory_lots
+            ORDER BY CAST(bin_number AS INTEGER) DESC
+            LIMIT 1
+            """
         )
 
-        if location_name == "Warehouse" and warehouse_quadrant is None:
-            return "Warehouse quadrant is required for Warehouse bins.", 400
+    if not row or not row["bin_number"]:
+        return "000001"
 
-        result = conn.execute(
-            text(
-                """
-                INSERT INTO inventory_lots (
-                    bin_number,
-                    category_id,
-                    storage_purpose_id,
-                    current_location_id,
-                    warehouse_quadrant,
-                    event_id,
-                    quantity_on_hand,
-                    status
-                )
-                VALUES (
-                    :bin_number,
-                    :category_id,
-                    :storage_purpose_id,
-                    :current_location_id,
-                    :warehouse_quadrant,
-                    :event_id,
-                    1,
-                    'active'
-                )
-                RETURNING inventory_lot_id
-                """
-            ),
-            {
-                "bin_number": bin_number,
-                "category_id": category_id,
-                "storage_purpose_id": storage_purpose_id,
-                "current_location_id": location_id,
-                "warehouse_quadrant": warehouse_quadrant,
-                "event_id": event_id,
-            },
-        ).mappings().first()
+    return f"{int(row['bin_number']) + 1:06d}"
+
+
+def get_location_name(conn, location_id):
+    row = fetch_one(
+        conn,
+        """
+        SELECT location_name
+        FROM locations
+        WHERE location_id = :location_id
+        """,
+        {"location_id": location_id},
+    )
+    return row["location_name"] if row else None
+
+
+def normalize_zone(location_name, zone_value):
+    if location_name != "Warehouse":
+        return None
+
+    zone = (zone_value or "").strip().upper()
+    return zone if zone in {"A", "B", "C", "D", "E"} else None
+
+
+def get_lookup_data():
+    with get_connection() as conn:
+        categories = fetch_all(
+            conn,
+            """
+            SELECT *
+            FROM categories
+            WHERE is_active = TRUE
+            ORDER BY category_name
+            """
+        )
+
+        purposes = fetch_all(
+            conn,
+            """
+            SELECT *
+            FROM storage_purposes
+            WHERE is_active = TRUE
+            ORDER BY purpose_name
+            """
+        )
+
+        locations = fetch_all(
+            conn,
+            """
+            SELECT *
+            FROM locations
+            WHERE is_active = TRUE
+            ORDER BY location_name
+            """
+        )
+
+        events = fetch_all(
+            conn,
+            """
+            SELECT *
+            FROM events
+            WHERE is_active = TRUE
+            ORDER BY event_name
+            """
+        )
+
+    return categories, purposes, locations, events
+
+
+def create_bin(conn, *, bin_number, category_id, storage_purpose_id, location_id, event_id=None, zone=None, note="Bin created"):
+    location_name = get_location_name(conn, location_id)
+    warehouse_zone = normalize_zone(location_name, zone)
+
+    if location_name == "Warehouse" and warehouse_zone is None:
+        raise ValueError("Warehouse zone is required for Warehouse bins.")
+
+    result = conn.execute(
+        text(
+            """
+            INSERT INTO inventory_lots (
+                bin_number,
+                category_id,
+                storage_purpose_id,
+                current_location_id,
+                warehouse_zone,
+                event_id,
+                quantity_on_hand,
+                status
+            )
+            VALUES (
+                :bin_number,
+                :category_id,
+                :storage_purpose_id,
+                :current_location_id,
+                :warehouse_zone,
+                :event_id,
+                1,
+                'active'
+            )
+            RETURNING inventory_lot_id
+            """
+        ),
+        {
+            "bin_number": bin_number,
+            "category_id": category_id,
+            "storage_purpose_id": storage_purpose_id,
+            "current_location_id": location_id,
+            "warehouse_zone": warehouse_zone,
+            "event_id": event_id,
+        },
+    ).mappings().first()
+
+    conn.execute(
+        text(
+            """
+            INSERT INTO inventory_transactions (
+                inventory_lot_id,
+                transaction_type,
+                quantity,
+                from_location_id,
+                to_location_id,
+                event_id,
+                reason_note
+            )
+            VALUES (
+                :inventory_lot_id,
+                'add',
+                1,
+                NULL,
+                :to_location_id,
+                :event_id,
+                :reason_note
+            )
+            """
+        ),
+        {
+            "inventory_lot_id": result["inventory_lot_id"],
+            "to_location_id": location_id,
+            "event_id": event_id,
+            "reason_note": note,
+        },
+    )
+
+    return result["inventory_lot_id"]
+
+
+def get_or_create_event(conn, event_name):
+    event_name = (event_name or "").strip()
+    if not event_name:
+        return None
+
+    event = fetch_one(
+        conn,
+        """
+        SELECT event_id
+        FROM events
+        WHERE event_name = :event_name
+        """,
+        {"event_name": event_name},
+    )
+
+    if event:
+        return event["event_id"]
+
+    event_result = conn.execute(
+        text(
+            """
+            INSERT INTO events (event_name, is_active)
+            VALUES (:event_name, TRUE)
+            RETURNING event_id
+            """
+        ),
+        {"event_name": event_name},
+    ).mappings().first()
+
+    return event_result["event_id"]
+
+
+def get_active_inventory_summary():
+    with get_connection() as conn:
+        return fetch_one(
+            conn,
+            """
+            SELECT
+                COUNT(*) AS total_bins,
+                COALESCE(SUM(CASE WHEN sp.purpose_name = 'Event' THEN 1 ELSE 0 END), 0) AS event_bins,
+                COALESCE(SUM(CASE WHEN sp.purpose_name = 'Carryover' THEN 1 ELSE 0 END), 0) AS carryover_bins
+            FROM inventory_lots il
+            JOIN storage_purposes sp
+                ON il.storage_purpose_id = sp.storage_purpose_id
+            WHERE il.status = 'active'
+            """
+        )
+
+
+def apply_inventory_action(conn, selected_ids, action, to_location_id=None, warehouse_zone=None):
+    selected_ids = [int(x) for x in selected_ids]
+
+    if not selected_ids:
+        return
+
+    rows = conn.execute(
+        text(
+            """
+            SELECT inventory_lot_id, bin_number, current_location_id
+            FROM inventory_lots
+            WHERE inventory_lot_id IN :selected_ids
+            """
+        ).bindparams(bindparam("selected_ids", expanding=True)),
+        {"selected_ids": selected_ids},
+    ).mappings().all()
+
+    if action in {"deplete", "delete"}:
+        new_status = "depleted" if action == "deplete" else "deleted"
 
         conn.execute(
             text(
                 """
-                INSERT INTO inventory_transactions (
-                    inventory_lot_id,
-                    transaction_type,
-                    quantity,
-                    from_location_id,
-                    to_location_id,
-                    event_id,
-                    reason_note
-                )
-                VALUES (
-                    :inventory_lot_id,
-                    'add',
-                    1,
-                    NULL,
-                    :to_location_id,
-                    :event_id,
-                    :reason_note
-                )
+                UPDATE inventory_lots
+                SET status = :status,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE inventory_lot_id IN :selected_ids
                 """
-            ),
-            {
-                "inventory_lot_id": result["inventory_lot_id"],
-                "to_location_id": location_id,
-                "event_id": event_id,
-                "reason_note": f"Bin {bin_number} created from dashboard",
-            },
+            ).bindparams(bindparam("selected_ids", expanding=True)),
+            {"status": new_status, "selected_ids": selected_ids},
         )
 
-    return redirect(url_for("dashboard"))
+        transaction_type = "deplete" if action == "deplete" else "delete"
 
-
-@app.route("/inventory")
-def inventory():
-    with get_connection() as conn:
-        summary = conn.execute(
-            text(
-                """
-                SELECT
-                    COUNT(*) AS total_bins,
-                    COALESCE(SUM(CASE WHEN sp.purpose_name = 'Event' THEN 1 ELSE 0 END), 0) AS event_bins,
-                    COALESCE(SUM(CASE WHEN sp.purpose_name = 'Carryover' THEN 1 ELSE 0 END), 0) AS carryover_bins
-                FROM inventory_lots il
-                JOIN storage_purposes sp
-                    ON il.storage_purpose_id = sp.storage_purpose_id
-                WHERE il.status = 'active'
-                """
-            )
-        ).mappings().first()
-
-    return render_template("inventory.html", inventory_summary=summary)
-
-
-@app.route("/inventory/list", methods=["GET", "POST"])
-def inventory_list():
-    search = (request.args.get("search") or "").strip()
-
-    if request.method == "POST":
-        action = request.form.get("action")
-        selected_bins = request.form.getlist("selected_bins")
-        search = (request.form.get("search") or "").strip()
-
-        if selected_bins:
-            with engine.begin() as conn:
-                rows = conn.execute(
-                    text(
-                        """
-                        SELECT inventory_lot_id, bin_number, current_location_id
-                        FROM inventory_lots
-                        WHERE CAST(inventory_lot_id AS TEXT) = ANY(:selected_bins)
-                        """
-                    ),
-                    {"selected_bins": selected_bins},
-                ).mappings().all()
-
-                if action == "deplete":
-                    conn.execute(
-                        text(
-                            """
-                            UPDATE inventory_lots
-                            SET status = 'depleted',
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE CAST(inventory_lot_id AS TEXT) = ANY(:selected_bins)
-                            """
-                        ),
-                        {"selected_bins": selected_bins},
-                    )
-
-                    for row in rows:
-                        conn.execute(
-                            text(
-                                """
-                                INSERT INTO inventory_transactions (
-                                    inventory_lot_id,
-                                    transaction_type,
-                                    quantity,
-                                    from_location_id,
-                                    to_location_id,
-                                    event_id,
-                                    reason_note
-                                )
-                                VALUES (
-                                    :inventory_lot_id,
-                                    'deplete',
-                                    1,
-                                    :from_location_id,
-                                    NULL,
-                                    NULL,
-                                    :reason_note
-                                )
-                                """
-                            ),
-                            {
-                                "inventory_lot_id": row["inventory_lot_id"],
-                                "from_location_id": row["current_location_id"],
-                                "reason_note": f"Bin {row['bin_number']} marked depleted",
-                            },
-                        )
-
-                elif action == "delete":
-                    conn.execute(
-                        text(
-                            """
-                            UPDATE inventory_lots
-                            SET status = 'deleted',
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE CAST(inventory_lot_id AS TEXT) = ANY(:selected_bins)
-                            """
-                        ),
-                        {"selected_bins": selected_bins},
-                    )
-
-                    for row in rows:
-                        conn.execute(
-                            text(
-                                """
-                                INSERT INTO inventory_transactions (
-                                    inventory_lot_id,
-                                    transaction_type,
-                                    quantity,
-                                    from_location_id,
-                                    to_location_id,
-                                    event_id,
-                                    reason_note
-                                )
-                                VALUES (
-                                    :inventory_lot_id,
-                                    'delete',
-                                    1,
-                                    :from_location_id,
-                                    NULL,
-                                    NULL,
-                                    :reason_note
-                                )
-                                """
-                            ),
-                            {
-                                "inventory_lot_id": row["inventory_lot_id"],
-                                "from_location_id": row["current_location_id"],
-                                "reason_note": f"Bin {row['bin_number']} deleted",
-                            },
-                        )
-
-                elif action == "move":
-                    to_location_id = request.form.get("to_location_id")
-                    if to_location_id:
-                        destination_name = get_location_name(conn, to_location_id)
-                        warehouse_quadrant = normalize_quadrant(
-                            destination_name,
-                            request.form.get("warehouse_quadrant"),
-                        )
-
-                        if destination_name == "Warehouse" and warehouse_quadrant is None:
-                            return "Warehouse quadrant is required when moving into Warehouse.", 400
-
-                        conn.execute(
-                            text(
-                                """
-                                UPDATE inventory_lots
-                                SET current_location_id = :to_location_id,
-                                    warehouse_quadrant = :warehouse_quadrant,
-                                    updated_at = CURRENT_TIMESTAMP
-                                WHERE CAST(inventory_lot_id AS TEXT) = ANY(:selected_bins)
-                                """
-                            ),
-                            {
-                                "to_location_id": to_location_id,
-                                "warehouse_quadrant": warehouse_quadrant,
-                                "selected_bins": selected_bins,
-                            },
-                        )
-
-                        for row in rows:
-                            conn.execute(
-                                text(
-                                    """
-                                    INSERT INTO inventory_transactions (
-                                        inventory_lot_id,
-                                        transaction_type,
-                                        quantity,
-                                        from_location_id,
-                                        to_location_id,
-                                        event_id,
-                                        reason_note
-                                    )
-                                    VALUES (
-                                        :inventory_lot_id,
-                                        'move',
-                                        1,
-                                        :from_location_id,
-                                        :to_location_id,
-                                        NULL,
-                                        :reason_note
-                                    )
-                                    """
-                                ),
-                                {
-                                    "inventory_lot_id": row["inventory_lot_id"],
-                                    "from_location_id": row["current_location_id"],
-                                    "to_location_id": to_location_id,
-                                    "reason_note": f"Bin {row['bin_number']} moved",
-                                },
-                            )
-
-        return redirect(url_for("inventory_list", search=search))
-
-    with get_connection() as conn:
-        if search:
-            lots = conn.execute(
-                text(
-                    """
-                    SELECT
-                        il.inventory_lot_id,
-                        il.bin_number,
-                        c.category_name,
-                        sp.purpose_name,
-                        l.location_name,
-                        il.warehouse_quadrant,
-                        e.event_name,
-                        il.status,
-                        il.date_added
-                    FROM inventory_lots il
-                    JOIN categories c ON il.category_id = c.category_id
-                    JOIN storage_purposes sp ON il.storage_purpose_id = sp.storage_purpose_id
-                    JOIN locations l ON il.current_location_id = l.location_id
-                    LEFT JOIN events e ON il.event_id = e.event_id
-                    WHERE il.status = 'active'
-                      AND (
-                          il.bin_number ILIKE :term
-                          OR c.category_name ILIKE :term
-                          OR sp.purpose_name ILIKE :term
-                          OR COALESCE(e.event_name, '') ILIKE :term
-                      )
-                    ORDER BY CAST(il.bin_number AS INTEGER)
-                    """
-                ),
-                {"term": f"%{search}%"},
-            ).mappings().all()
-        else:
-            lots = conn.execute(
-                text(
-                    """
-                    SELECT
-                        il.inventory_lot_id,
-                        il.bin_number,
-                        c.category_name,
-                        sp.purpose_name,
-                        l.location_name,
-                        il.warehouse_quadrant,
-                        e.event_name,
-                        il.status,
-                        il.date_added
-                    FROM inventory_lots il
-                    JOIN categories c ON il.category_id = c.category_id
-                    JOIN storage_purposes sp ON il.storage_purpose_id = sp.storage_purpose_id
-                    JOIN locations l ON il.current_location_id = l.location_id
-                    LEFT JOIN events e ON il.event_id = e.event_id
-                    WHERE il.status = 'active'
-                    ORDER BY CAST(il.bin_number AS INTEGER)
-                    """
-                )
-            ).mappings().all()
-
-        locations = conn.execute(
-            text(
-                """
-                SELECT *
-                FROM locations
-                WHERE is_active = TRUE
-                ORDER BY location_name
-                """
-            )
-        ).mappings().all()
-
-    return render_template(
-        "inventory_list.html",
-        inventory_lots=lots,
-        locations=locations,
-        search=search,
-    )
-
-@app.route("/inventory/add", methods=["GET", "POST"])
-def add_inventory():
-    if request.method == "POST":
-        bin_number = request.form.get("bin_number")
-        category_id = request.form.get("category_id")
-        storage_purpose_id = request.form.get("storage_purpose_id")
-        location_id = request.form.get("current_location_id")
-        event_id = request.form.get("event_id") or None
-
-        with engine.begin() as conn:
-            location_name = get_location_name(conn, location_id)
-            warehouse_quadrant = normalize_quadrant(
-                location_name, request.form.get("warehouse_quadrant")
-            )
-
-            if location_name == "Warehouse" and warehouse_quadrant is None:
-                return "Warehouse quadrant is required for Warehouse bins.", 400
-
-            result = conn.execute(
-                text(
-                    """
-                    INSERT INTO inventory_lots (
-                        bin_number,
-                        category_id,
-                        storage_purpose_id,
-                        current_location_id,
-                        warehouse_quadrant,
-                        event_id,
-                        quantity_on_hand,
-                        status
-                    )
-                    VALUES (
-                        :bin_number,
-                        :category_id,
-                        :storage_purpose_id,
-                        :current_location_id,
-                        :warehouse_quadrant,
-                        :event_id,
-                        1,
-                        'active'
-                    )
-                    RETURNING inventory_lot_id
-                    """
-                ),
-                {
-                    "bin_number": bin_number,
-                    "category_id": category_id,
-                    "storage_purpose_id": storage_purpose_id,
-                    "current_location_id": location_id,
-                    "warehouse_quadrant": warehouse_quadrant,
-                    "event_id": event_id,
-                },
-            ).mappings().first()
-
+        for row in rows:
             conn.execute(
                 text(
                     """
@@ -743,80 +335,48 @@ def add_inventory():
                     )
                     VALUES (
                         :inventory_lot_id,
-                        'add',
+                        :transaction_type,
                         1,
+                        :from_location_id,
                         NULL,
-                        :to_location_id,
-                        :event_id,
+                        NULL,
                         :reason_note
                     )
                     """
                 ),
                 {
-                    "inventory_lot_id": result["inventory_lot_id"],
-                    "to_location_id": location_id,
-                    "event_id": event_id,
-                    "reason_note": f"Bin {bin_number} created",
+                    "inventory_lot_id": row["inventory_lot_id"],
+                    "transaction_type": transaction_type,
+                    "from_location_id": row["current_location_id"],
+                    "reason_note": f"Bin {row['bin_number']} marked {new_status}",
                 },
             )
 
-        return redirect(url_for("inventory_list"))
+    elif action == "move" and to_location_id:
+        destination_name = get_location_name(conn, to_location_id)
+        normalized_zone = normalize_zone(destination_name, warehouse_zone)
 
-    categories, purposes, locations, events = get_quick_bin_lookups()
+        if destination_name == "Warehouse" and normalized_zone is None:
+            raise ValueError("Warehouse zone is required when moving into Warehouse.")
 
-    return render_template(
-        "add_inventory.html",
-        next_bin_number=generate_next_bin_number(),
-        categories=categories,
-        storage_purposes=purposes,
-        locations=locations,
-        events=events,
-    )
+        conn.execute(
+            text(
+                """
+                UPDATE inventory_lots
+                SET current_location_id = :to_location_id,
+                    warehouse_zone = :warehouse_zone,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE inventory_lot_id IN :selected_ids
+                """
+            ).bindparams(bindparam("selected_ids", expanding=True)),
+            {
+                "to_location_id": to_location_id,
+                "warehouse_zone": normalized_zone,
+                "selected_ids": selected_ids,
+            },
+        )
 
-
-@app.route("/inventory/move", methods=["GET", "POST"])
-def move_inventory():
-    if request.method == "POST":
-        lot_id = request.form.get("inventory_lot_id")
-        to_location_id = request.form.get("to_location_id")
-
-        with engine.begin() as conn:
-            lot = conn.execute(
-                text(
-                    """
-                    SELECT inventory_lot_id, current_location_id, bin_number
-                    FROM inventory_lots
-                    WHERE inventory_lot_id = :lot_id
-                    """
-                ),
-                {"lot_id": lot_id},
-            ).mappings().first()
-
-            destination_name = get_location_name(conn, to_location_id)
-            warehouse_quadrant = normalize_quadrant(
-                destination_name, request.form.get("warehouse_quadrant")
-            )
-
-            if destination_name == "Warehouse" and warehouse_quadrant is None:
-                return "Warehouse quadrant is required when moving into Warehouse.", 400
-
-            conn.execute(
-                text(
-                    """
-                    UPDATE inventory_lots
-                    SET current_location_id = :to_location_id,
-                        warehouse_quadrant = :warehouse_quadrant,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE inventory_lot_id = :lot_id
-                    """
-                ),
-                {
-                    "to_location_id": to_location_id,
-                    "warehouse_quadrant": warehouse_quadrant,
-                    "lot_id": lot_id,
-                },
-            )
-
+        for row in rows:
             conn.execute(
                 text(
                     """
@@ -841,305 +401,325 @@ def move_inventory():
                     """
                 ),
                 {
-                    "inventory_lot_id": lot_id,
-                    "from_location_id": lot["current_location_id"],
+                    "inventory_lot_id": row["inventory_lot_id"],
+                    "from_location_id": row["current_location_id"],
                     "to_location_id": to_location_id,
-                    "reason_note": f"Bin {lot['bin_number']} moved",
+                    "reason_note": f"Bin {row['bin_number']} moved",
                 },
             )
 
-        return redirect(url_for("inventory_list"))
 
-    with get_connection() as conn:
-        lots = conn.execute(
-            text(
-                """
-                SELECT il.inventory_lot_id, il.bin_number, c.category_name, l.location_name
-                FROM inventory_lots il
-                JOIN categories c ON il.category_id = c.category_id
-                JOIN locations l ON il.current_location_id = l.location_id
-                WHERE il.status = 'active'
-                ORDER BY CAST(il.bin_number AS INTEGER)
-                """
+# ---------------------------------------------------------
+# DASHBOARD
+# ---------------------------------------------------------
+
+@app.route("/")
+def dashboard():
+    categories, purposes, locations, events = get_lookup_data()
+
+    return render_template(
+        "dashboard.html",
+        summary=get_active_inventory_summary(),
+        next_bin_number=generate_next_bin_number(),
+        categories=categories,
+        storage_purposes=purposes,
+        locations=locations,
+        events=events,
+    )
+
+
+@app.route("/inventory/quick-add", methods=["POST"])
+def quick_add_inventory():
+    try:
+        with engine.begin() as conn:
+            create_bin(
+                conn,
+                bin_number=request.form.get("bin_number"),
+                category_id=request.form.get("category_id"),
+                storage_purpose_id=request.form.get("storage_purpose_id"),
+                location_id=request.form.get("current_location_id"),
+                event_id=request.form.get("event_id") or None,
+                zone=request.form.get("warehouse_zone"),
+                note=f"Bin {request.form.get('bin_number')} created from dashboard",
             )
-        ).mappings().all()
+    except ValueError as error:
+        return str(error), 400
 
-        locations = conn.execute(
-            text(
-                """
-                SELECT *
-                FROM locations
-                WHERE is_active = TRUE
-                ORDER BY location_name
-                """
-            )
-        ).mappings().all()
-
-    return render_template("move_inventory.html", inventory_lots=lots, locations=locations)
+    return redirect(url_for("dashboard"))
 
 
-@app.route("/inventory/deploy", methods=["GET", "POST"])
-def deploy_inventory():
-    if "deploy_bins" not in session:
-        session["deploy_bins"] = []
+# ---------------------------------------------------------
+# INVENTORY
+# ---------------------------------------------------------
+
+@app.route("/inventory")
+def inventory():
+    return render_template("inventory.html", inventory_summary=get_active_inventory_summary())
+
+
+@app.route("/inventory/list", methods=["GET", "POST"])
+def inventory_list():
+    search = (request.args.get("search") or "").strip()
 
     if request.method == "POST":
+        search = (request.form.get("search") or "").strip()
         action = request.form.get("action")
+        selected_bins = request.form.getlist("selected_bins")
 
-        if action == "add_bin":
-            bin_number = (request.form.get("bin_number") or "").strip()
-
-            if bin_number:
-                with get_connection() as conn:
-                    row = conn.execute(
-                        text(
-                            """
-                            SELECT bin_number, status
-                            FROM inventory_lots
-                            WHERE bin_number = :bin_number
-                            """
-                        ),
-                        {"bin_number": bin_number},
-                    ).mappings().first()
-
-                if row and row["status"] == "active":
-                    queued = session.get("deploy_bins", [])
-                    if bin_number not in queued:
-                        queued.append(bin_number)
-                        session["deploy_bins"] = queued
-
-            return redirect(url_for("deploy_inventory"))
-
-        if action == "submit_deploy":
-            queued = session.get("deploy_bins", [])
-
-            if queued:
+        if selected_bins:
+            try:
                 with engine.begin() as conn:
-                    rows = conn.execute(
-                        text(
-                            """
-                            SELECT inventory_lot_id, bin_number, current_location_id
-                            FROM inventory_lots
-                            WHERE bin_number = ANY(:queued)
-                            """
-                        ),
-                        {"queued": queued},
-                    ).mappings().all()
-
-                    conn.execute(
-                        text(
-                            """
-                            UPDATE inventory_lots
-                            SET status = 'depleted',
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE bin_number = ANY(:queued)
-                            """
-                        ),
-                        {"queued": queued},
+                    apply_inventory_action(
+                        conn,
+                        selected_bins,
+                        action,
+                        to_location_id=request.form.get("to_location_id"),
+                        warehouse_zone=request.form.get("warehouse_zone"),
                     )
+            except ValueError as error:
+                return str(error), 400
 
-                    for row in rows:
-                        conn.execute(
-                            text(
-                                """
-                                INSERT INTO inventory_transactions (
-                                    inventory_lot_id,
-                                    transaction_type,
-                                    quantity,
-                                    from_location_id,
-                                    to_location_id,
-                                    event_id,
-                                    reason_note
-                                )
-                                VALUES (
-                                    :inventory_lot_id,
-                                    'deploy',
-                                    1,
-                                    :from_location_id,
-                                    NULL,
-                                    NULL,
-                                    :reason_note
-                                )
-                                """
-                            ),
-                            {
-                                "inventory_lot_id": row["inventory_lot_id"],
-                                "from_location_id": row["current_location_id"],
-                                "reason_note": f"Bin {row['bin_number']} deployed",
-                            },
-                        )
-
-            session["deploy_bins"] = []
-            return redirect(url_for("inventory_list"))
-
-        if action == "clear_list":
-            session["deploy_bins"] = []
-            return redirect(url_for("deploy_inventory"))
-
-    queued_bins = session.get("deploy_bins", [])
+        return redirect(url_for("inventory_list", search=search))
 
     with get_connection() as conn:
-        if queued_bins:
-            queued_bin_rows = conn.execute(
-                text(
-                    """
-                    SELECT
-                        il.bin_number,
-                        c.category_name,
-                        l.location_name,
-                        il.status
-                    FROM inventory_lots il
-                    JOIN categories c ON il.category_id = c.category_id
-                    JOIN locations l ON il.current_location_id = l.location_id
-                    WHERE il.bin_number = ANY(:queued)
-                    ORDER BY CAST(il.bin_number AS INTEGER)
-                    """
-                ),
-                {"queued": queued_bins},
-            ).mappings().all()
-        else:
-            queued_bin_rows = []
+        params = {}
+        search_clause = ""
 
-    return render_template("deploy_inventory.html", queued_bins=queued_bin_rows)
+        if search:
+            search_clause = """
+                AND (
+                    LOWER(il.bin_number) LIKE LOWER(:term)
+                    OR LOWER(c.category_name) LIKE LOWER(:term)
+                    OR LOWER(sp.purpose_name) LIKE LOWER(:term)
+                    OR LOWER(COALESCE(e.event_name, '')) LIKE LOWER(:term)
+                )
+            """
+            params["term"] = f"%{search}%"
 
-
-@app.route("/inventory/delete/<int:lot_id>", methods=["POST"])
-def delete_inventory(lot_id):
-    with engine.begin() as conn:
-        lot = conn.execute(
-            text(
-                """
-                SELECT inventory_lot_id, bin_number, current_location_id
-                FROM inventory_lots
-                WHERE inventory_lot_id = :lot_id
-                """
-            ),
-            {"lot_id": lot_id},
-        ).mappings().first()
-
-        if not lot:
-            return redirect(url_for("inventory_list"))
-
-        conn.execute(
-            text(
-                """
-                UPDATE inventory_lots
-                SET status = 'deleted',
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE inventory_lot_id = :lot_id
-                """
-            ),
-            {"lot_id": lot_id},
+        lots = fetch_all(
+            conn,
+            f"""
+            SELECT
+                il.inventory_lot_id,
+                il.bin_number,
+                c.category_name,
+                sp.purpose_name,
+                l.location_name,
+                il.warehouse_zone,
+                e.event_name,
+                il.status,
+                il.date_added
+            FROM inventory_lots il
+            JOIN categories c ON il.category_id = c.category_id
+            JOIN storage_purposes sp ON il.storage_purpose_id = sp.storage_purpose_id
+            JOIN locations l ON il.current_location_id = l.location_id
+            LEFT JOIN events e ON il.event_id = e.event_id
+            WHERE il.status = 'active'
+            {search_clause}
+            ORDER BY CAST(il.bin_number AS INTEGER)
+            """,
+            params,
         )
 
-        conn.execute(
-            text(
-                """
-                INSERT INTO inventory_transactions (
-                    inventory_lot_id,
-                    transaction_type,
-                    quantity,
-                    from_location_id,
-                    to_location_id,
-                    event_id,
-                    reason_note
-                )
-                VALUES (
-                    :inventory_lot_id,
-                    'delete',
-                    1,
-                    :from_location_id,
-                    NULL,
-                    NULL,
-                    :reason_note
-                )
-                """
-            ),
-            {
-                "inventory_lot_id": lot_id,
-                "from_location_id": lot["current_location_id"],
-                "reason_note": f"Bin {lot['bin_number']} deleted",
-            },
+        locations = fetch_all(
+            conn,
+            """
+            SELECT *
+            FROM locations
+            WHERE is_active = TRUE
+            ORDER BY location_name
+            """
         )
 
-    return redirect(url_for("inventory_list"))
+    return render_template(
+        "inventory_list.html",
+        inventory_lots=lots,
+        locations=locations,
+        search=search,
+    )
 
+
+@app.route("/inventory/add", methods=["GET", "POST"])
+def add_inventory():
+    if request.method == "POST":
+        try:
+            with engine.begin() as conn:
+                create_bin(
+                    conn,
+                    bin_number=request.form.get("bin_number"),
+                    category_id=request.form.get("category_id"),
+                    storage_purpose_id=request.form.get("storage_purpose_id"),
+                    location_id=request.form.get("current_location_id"),
+                    event_id=request.form.get("event_id") or None,
+                    zone=request.form.get("warehouse_zone"),
+                    note=f"Bin {request.form.get('bin_number')} created",
+                )
+        except ValueError as error:
+            return str(error), 400
+
+        return redirect(url_for("inventory_list"))
+
+    categories, purposes, locations, events = get_lookup_data()
+
+    return render_template(
+        "add_inventory.html",
+        next_bin_number=generate_next_bin_number(),
+        categories=categories,
+        storage_purposes=purposes,
+        locations=locations,
+        events=events,
+    )
+
+
+@app.route("/inventory/upload", methods=["GET", "POST"])
+def upload_bins():
+    if request.method == "POST":
+        uploaded_file = request.files.get("csv_file")
+
+        if not uploaded_file:
+            return "No file uploaded", 400
+
+        stream = StringIO(uploaded_file.stream.read().decode("utf-8-sig"))
+        reader = csv.DictReader(stream)
+
+        required_columns = {
+            "bin_number",
+            "category",
+            "storage_purpose",
+            "location",
+            "warehouse_zone",
+            "event",
+        }
+
+        if not required_columns.issubset(set(reader.fieldnames or [])):
+            return "CSV is missing required columns", 400
+
+        with engine.begin() as conn:
+            for row in reader:
+                bin_number = (row.get("bin_number") or "").strip().zfill(6)
+                category_name = (row.get("category") or "").strip()
+                purpose_name = (row.get("storage_purpose") or "").strip()
+                location_name = (row.get("location") or "").strip()
+                zone = (row.get("warehouse_zone") or "").strip().upper()
+                event_name = (row.get("event") or "").strip()
+
+                if not all([bin_number, category_name, purpose_name, location_name]):
+                    continue
+
+                existing = fetch_one(
+                    conn,
+                    """
+                    SELECT inventory_lot_id
+                    FROM inventory_lots
+                    WHERE bin_number = :bin_number
+                    """,
+                    {"bin_number": bin_number},
+                )
+
+                if existing:
+                    continue
+
+                category = fetch_one(
+                    conn,
+                    """
+                    SELECT category_id
+                    FROM categories
+                    WHERE category_name = :category_name
+                    """,
+                    {"category_name": category_name},
+                )
+
+                purpose = fetch_one(
+                    conn,
+                    """
+                    SELECT storage_purpose_id
+                    FROM storage_purposes
+                    WHERE purpose_name = :purpose_name
+                    """,
+                    {"purpose_name": purpose_name},
+                )
+
+                location = fetch_one(
+                    conn,
+                    """
+                    SELECT location_id, location_name
+                    FROM locations
+                    WHERE location_name = :location_name
+                    """,
+                    {"location_name": location_name},
+                )
+
+                if not category or not purpose or not location:
+                    continue
+
+                event_id = get_or_create_event(conn, event_name)
+
+                try:
+                    create_bin(
+                        conn,
+                        bin_number=bin_number,
+                        category_id=category["category_id"],
+                        storage_purpose_id=purpose["storage_purpose_id"],
+                        location_id=location["location_id"],
+                        event_id=event_id,
+                        zone=zone,
+                        note=f"Bin {bin_number} uploaded from CSV",
+                    )
+                except ValueError:
+                    continue
+
+        return redirect(url_for("inventory_list"))
+
+    return render_template("upload_bins.html")
+
+
+# ---------------------------------------------------------
+# EVENTS
+# ---------------------------------------------------------
 
 @app.route("/events")
 def events():
     with get_connection() as conn:
-        summary_row = conn.execute(
-            text(
-                """
-                SELECT COUNT(CASE WHEN is_active = TRUE THEN 1 END) AS active_events
-                FROM events
-                """
-            )
-        ).mappings().first()
+        summary = fetch_one(
+            conn,
+            """
+            SELECT
+                COUNT(*) FILTER (WHERE is_active = TRUE) AS active_events,
+                COUNT(il.inventory_lot_id) FILTER (WHERE il.status = 'active') AS total_event_bins
+            FROM events e
+            LEFT JOIN inventory_lots il
+                ON e.event_id = il.event_id
+            """
+        )
 
-        totals_row = conn.execute(
-            text(
-                """
-                SELECT
-                    COUNT(il.inventory_lot_id) AS total_event_bins
-                FROM inventory_lots il
-                WHERE il.event_id IS NOT NULL
-                  AND il.status = 'active'
-                """
-            )
-        ).mappings().first()
-
-        tallies = conn.execute(
-            text(
-                """
-                SELECT
-                    e.event_id,
-                    e.event_name,
-                    e.start_date,
-                    e.end_date,
-                    e.is_active,
-                    COUNT(il.inventory_lot_id) FILTER (WHERE il.status = 'active') AS bins_assigned
-                FROM events e
-                LEFT JOIN inventory_lots il
-                    ON e.event_id = il.event_id
-                GROUP BY e.event_id, e.event_name, e.start_date, e.end_date, e.is_active
-                ORDER BY e.event_name
-                """
-            )
-        ).mappings().all()
-
-        events_list = conn.execute(
-            text(
-                """
-                SELECT *
-                FROM events
-                ORDER BY event_name
-                """
-            )
-        ).mappings().all()
-
-    event_summary = {
-        "active_events": summary_row["active_events"],
-        "total_event_bins": totals_row["total_event_bins"],
-    }
+        event_rows = fetch_all(
+            conn,
+            """
+            SELECT
+                e.event_id,
+                e.event_name,
+                e.start_date,
+                e.end_date,
+                e.is_active,
+                COUNT(il.inventory_lot_id) FILTER (WHERE il.status = 'active') AS bins_assigned
+            FROM events e
+            LEFT JOIN inventory_lots il
+                ON e.event_id = il.event_id
+            GROUP BY e.event_id, e.event_name, e.start_date, e.end_date, e.is_active
+            ORDER BY e.event_name
+            """
+        )
 
     return render_template(
         "events.html",
-        event_summary=event_summary,
-        event_tallies=tallies,
-        events=events_list,
+        events=event_rows,
+        event_summary=summary,
     )
 
 
 @app.route("/events/add", methods=["GET", "POST"])
 def add_event():
     if request.method == "POST":
-        name = request.form.get("event_name")
-        start_date = request.form.get("start_date") or None
-        end_date = request.form.get("end_date") or None
-        notes = request.form.get("notes") or ""
-        is_active = request.form.get("is_active", "1") == "1"
-
         with engine.begin() as conn:
             conn.execute(
                 text(
@@ -1149,11 +729,11 @@ def add_event():
                     """
                 ),
                 {
-                    "event_name": name,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "notes": notes,
-                    "is_active": is_active,
+                    "event_name": request.form.get("event_name"),
+                    "start_date": request.form.get("start_date") or None,
+                    "end_date": request.form.get("end_date") or None,
+                    "notes": request.form.get("notes") or "",
+                    "is_active": request.form.get("is_active", "1") == "1",
                 },
             )
 
@@ -1162,43 +742,167 @@ def add_event():
     return render_template("add_event.html")
 
 
+@app.route("/events/delete/<int:event_id>", methods=["POST"])
+def delete_event(event_id):
+    with engine.begin() as conn:
+        active_bins = fetch_one(
+            conn,
+            """
+            SELECT COUNT(*) AS active_bin_count
+            FROM inventory_lots
+            WHERE event_id = :event_id
+              AND status = 'active'
+            """,
+            {"event_id": event_id},
+        )
+
+        if active_bins["active_bin_count"] > 0:
+            return "This event cannot be archived because it still has active bins assigned.", 400
+
+        conn.execute(
+            text(
+                """
+                UPDATE events
+                SET is_active = FALSE
+                WHERE event_id = :event_id
+                """
+            ),
+            {"event_id": event_id},
+        )
+
+    return redirect(url_for("events"))
+
+
+# ---------------------------------------------------------
+# REPORTS
+# ---------------------------------------------------------
+
+def build_report_data(conn, report_type):
+    reports = {
+        "inventory_by_category": (
+            "Active Bins by Category",
+            ["category_name", "bin_count"],
+            """
+            SELECT c.category_name, COUNT(il.inventory_lot_id) AS bin_count
+            FROM categories c
+            LEFT JOIN inventory_lots il
+                ON c.category_id = il.category_id
+               AND il.status = 'active'
+            GROUP BY c.category_id, c.category_name
+            ORDER BY c.category_name
+            """,
+        ),
+        "inventory_by_location": (
+            "Active Bins by Location",
+            ["location_name", "warehouse_zone", "bin_count"],
+            """
+            SELECT
+                l.location_name,
+                COALESCE(il.warehouse_zone, '') AS warehouse_zone,
+                COUNT(il.inventory_lot_id) AS bin_count
+            FROM locations l
+            LEFT JOIN inventory_lots il
+                ON l.location_id = il.current_location_id
+               AND il.status = 'active'
+            GROUP BY l.location_id, l.location_name, il.warehouse_zone
+            ORDER BY l.location_name, il.warehouse_zone
+            """,
+        ),
+        "inventory_by_storage_purpose": (
+            "Active Bins by Storage Purpose",
+            ["purpose_name", "bin_count"],
+            """
+            SELECT sp.purpose_name, COUNT(il.inventory_lot_id) AS bin_count
+            FROM storage_purposes sp
+            LEFT JOIN inventory_lots il
+                ON sp.storage_purpose_id = il.storage_purpose_id
+               AND il.status = 'active'
+            GROUP BY sp.storage_purpose_id, sp.purpose_name
+            ORDER BY sp.purpose_name
+            """,
+        ),
+        "event_inventory": (
+            "Active Event Bins",
+            ["event_name", "bin_count"],
+            """
+            SELECT e.event_name, COUNT(il.inventory_lot_id) AS bin_count
+            FROM events e
+            LEFT JOIN inventory_lots il
+                ON e.event_id = il.event_id
+               AND il.status = 'active'
+            GROUP BY e.event_id, e.event_name
+            ORDER BY e.event_name
+            """,
+        ),
+        "status_summary": (
+            "Bin Status Summary",
+            ["status", "bin_count"],
+            """
+            SELECT status, COUNT(*) AS bin_count
+            FROM inventory_lots
+            GROUP BY status
+            ORDER BY status
+            """,
+        ),
+        "transaction_history": (
+            "Transaction History",
+            [
+                "transaction_datetime",
+                "transaction_type",
+                "bin_number",
+                "category_name",
+                "from_location",
+                "to_location",
+                "reason_note",
+            ],
+            """
+            SELECT
+                it.transaction_datetime,
+                it.transaction_type,
+                il.bin_number,
+                c.category_name,
+                COALESCE(fl.location_name, '') AS from_location,
+                COALESCE(tl.location_name, '') AS to_location,
+                COALESCE(it.reason_note, '') AS reason_note
+            FROM inventory_transactions it
+            JOIN inventory_lots il
+                ON it.inventory_lot_id = il.inventory_lot_id
+            JOIN categories c
+                ON il.category_id = c.category_id
+            LEFT JOIN locations fl
+                ON it.from_location_id = fl.location_id
+            LEFT JOIN locations tl
+                ON it.to_location_id = tl.location_id
+            ORDER BY it.transaction_datetime DESC, it.transaction_id DESC
+            LIMIT 100
+            """,
+        ),
+    }
+
+    if report_type not in reports:
+        return "Reports", [], []
+
+    title, columns, sql = reports[report_type]
+    return title, columns, fetch_all(conn, sql)
+
+
 @app.route("/reports")
 def reports():
     with get_connection() as conn:
-        report_summary = conn.execute(
-            text(
-                """
-                SELECT
-                    COUNT(*) AS total_bins,
-                    COALESCE(SUM(CASE WHEN sp.purpose_name = 'Event' THEN 1 ELSE 0 END), 0) AS event_bins,
-                    COALESCE(SUM(CASE WHEN sp.purpose_name = 'Carryover' THEN 1 ELSE 0 END), 0) AS carryover_bins
-                FROM inventory_lots il
-                JOIN storage_purposes sp
-                    ON il.storage_purpose_id = sp.storage_purpose_id
-                WHERE il.status = 'active'
-                """
-            )
-        ).mappings().first()
-
-        total_transactions = conn.execute(
-            text(
-                """
-                SELECT COUNT(*) AS total_transactions
-                FROM inventory_transactions
-                """
-            )
-        ).mappings().first()
+        report_summary = get_active_inventory_summary()
+        total_transactions = fetch_one(
+            conn,
+            """
+            SELECT COUNT(*) AS total_transactions
+            FROM inventory_transactions
+            """
+        )
 
         report_summary = dict(report_summary)
         report_summary["total_transactions"] = total_transactions["total_transactions"]
 
         report_type = request.args.get("report_type")
-        report_title = "Reports"
-        report_columns = []
-        report_results = []
-
-        if report_type:
-            report_title, report_columns, report_results = build_report_data(conn, report_type)
+        report_title, report_columns, report_results = build_report_data(conn, report_type)
 
     return render_template(
         "reports.html",
@@ -1217,21 +921,7 @@ def reports_download():
         return redirect(url_for("reports"))
 
     with get_connection() as conn:
-        report_summary = conn.execute(
-            text(
-                """
-                SELECT
-                    COUNT(*) AS total_bins,
-                    COALESCE(SUM(CASE WHEN sp.purpose_name = 'Event' THEN 1 ELSE 0 END), 0) AS event_bins,
-                    COALESCE(SUM(CASE WHEN sp.purpose_name = 'Carryover' THEN 1 ELSE 0 END), 0) AS carryover_bins
-                FROM inventory_lots il
-                JOIN storage_purposes sp
-                    ON il.storage_purpose_id = sp.storage_purpose_id
-                WHERE il.status = 'active'
-                """
-            )
-        ).mappings().first()
-
+        report_summary = get_active_inventory_summary()
         report_title, report_columns, report_results = build_report_data(conn, report_type)
 
     buffer = BytesIO()
@@ -1260,18 +950,18 @@ def reports_download():
     ]
 
     table_data = [[col.replace("_", " ").title() for col in report_columns]]
+
     for row in report_results:
         table_data.append([str(row[col]) for col in report_columns])
 
     if len(table_data) == 1:
-        table_data.append(["No data"] + [""] * (len(report_columns) - 1))
+        table_data.append(["No data"] + [""] * max(len(report_columns) - 1, 0))
 
     table = Table(table_data, repeatRows=1)
     table.setStyle(
         TableStyle(
             [
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#d9d9d9")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
@@ -1287,240 +977,13 @@ def reports_download():
     doc.build(elements)
     buffer.seek(0)
 
-    filename = f"{report_type}.pdf"
     return send_file(
         buffer,
         as_attachment=True,
-        download_name=filename,
+        download_name=f"{report_type}.pdf",
         mimetype="application/pdf",
     )
 
-
-@app.route("/inventory/upload", methods=["GET", "POST"])
-def upload_bins():
-    if request.method == "POST":
-        uploaded_file = request.files.get("csv_file")
-
-        if not uploaded_file:
-            return "No file uploaded", 400
-
-        stream = StringIO(uploaded_file.stream.read().decode("utf-8-sig"))
-        reader = csv.DictReader(stream)
-
-        required_columns = {
-            "bin_number",
-            "category",
-            "storage_purpose",
-            "location",
-            "warehouse_quadrant",
-            "event",
-        }
-
-        if not required_columns.issubset(set(reader.fieldnames or [])):
-            return "CSV is missing required columns", 400
-
-        created_count = 0
-        skipped_count = 0
-
-        with engine.begin() as conn:
-            for row in reader:
-                bin_number = (row.get("bin_number") or "").strip().zfill(6)
-                category_name = (row.get("category") or "").strip()
-                purpose_name = (row.get("storage_purpose") or "").strip()
-                location_name = (row.get("location") or "").strip()
-                quadrant = (row.get("warehouse_quadrant") or "").strip().upper() or None
-                event_name = (row.get("event") or "").strip()
-
-                if not bin_number or not category_name or not purpose_name or not location_name:
-                    skipped_count += 1
-                    continue
-
-                existing = conn.execute(
-                    text(
-                        """
-                        SELECT inventory_lot_id
-                        FROM inventory_lots
-                        WHERE bin_number = :bin_number
-                        """
-                    ),
-                    {"bin_number": bin_number},
-                ).mappings().first()
-
-                if existing:
-                    skipped_count += 1
-                    continue
-
-                category = conn.execute(
-                    text(
-                        """
-                        SELECT category_id
-                        FROM categories
-                        WHERE category_name = :category_name
-                        """
-                    ),
-                    {"category_name": category_name},
-                ).mappings().first()
-
-                purpose = conn.execute(
-                    text(
-                        """
-                        SELECT storage_purpose_id
-                        FROM storage_purposes
-                        WHERE purpose_name = :purpose_name
-                        """
-                    ),
-                    {"purpose_name": purpose_name},
-                ).mappings().first()
-
-                location = conn.execute(
-                    text(
-                        """
-                        SELECT location_id, location_name
-                        FROM locations
-                        WHERE location_name = :location_name
-                        """
-                    ),
-                    {"location_name": location_name},
-                ).mappings().first()
-
-                if not category or not purpose or not location:
-                    skipped_count += 1
-                    continue
-
-                if location["location_name"] == "Warehouse":
-                    if quadrant not in {"A", "B", "C", "D"}:
-                        skipped_count += 1
-                        continue
-                else:
-                    quadrant = None
-
-                event_id = None
-                if event_name:
-                    event = conn.execute(
-                        text(
-                            """
-                            SELECT event_id
-                            FROM events
-                            WHERE event_name = :event_name
-                            """
-                        ),
-                        {"event_name": event_name},
-                    ).mappings().first()
-
-                    if event:
-                        event_id = event["event_id"]
-                    else:
-                        event_result = conn.execute(
-                            text(
-                                """
-                                INSERT INTO events (event_name, is_active)
-                                VALUES (:event_name, TRUE)
-                                RETURNING event_id
-                                """
-                            ),
-                            {"event_name": event_name},
-                        ).mappings().first()
-                        event_id = event_result["event_id"]
-
-                result = conn.execute(
-                    text(
-                        """
-                        INSERT INTO inventory_lots (
-                            bin_number,
-                            category_id,
-                            storage_purpose_id,
-                            current_location_id,
-                            warehouse_quadrant,
-                            event_id,
-                            quantity_on_hand,
-                            status
-                        )
-                        VALUES (
-                            :bin_number,
-                            :category_id,
-                            :storage_purpose_id,
-                            :location_id,
-                            :warehouse_quadrant,
-                            :event_id,
-                            1,
-                            'active'
-                        )
-                        RETURNING inventory_lot_id
-                        """
-                    ),
-                    {
-                        "bin_number": bin_number,
-                        "category_id": category["category_id"],
-                        "storage_purpose_id": purpose["storage_purpose_id"],
-                        "location_id": location["location_id"],
-                        "warehouse_quadrant": quadrant,
-                        "event_id": event_id,
-                    },
-                ).mappings().first()
-
-                conn.execute(
-                    text(
-                        """
-                        INSERT INTO inventory_transactions (
-                            inventory_lot_id,
-                            transaction_type,
-                            quantity,
-                            from_location_id,
-                            to_location_id,
-                            event_id,
-                            reason_note
-                        )
-                        VALUES (
-                            :inventory_lot_id,
-                            'upload',
-                            1,
-                            NULL,
-                            :to_location_id,
-                            :event_id,
-                            :reason_note
-                        )
-                        """
-                    ),
-                    {
-                        "inventory_lot_id": result["inventory_lot_id"],
-                        "to_location_id": location["location_id"],
-                        "event_id": event_id,
-                        "reason_note": f"Bin {bin_number} uploaded from CSV",
-                    },
-                )
-
-                created_count += 1
-
-        return redirect(url_for("inventory_list"))
-
-    return render_template("upload_bins.html")
-
-@app.route("/events/delete/<int:event_id>", methods=["POST"])
-def delete_event(event_id):
-    with engine.begin() as conn:
-        active_bins = conn.execute(
-            text("""
-                SELECT COUNT(*) AS active_bin_count
-                FROM inventory_lots
-                WHERE event_id = :event_id
-                  AND status = 'active'
-            """),
-            {"event_id": event_id},
-        ).mappings().first()
-
-        if active_bins["active_bin_count"] > 0:
-            return "This event cannot be deleted because it still has active bins assigned.", 400
-
-        conn.execute(
-            text("""
-                UPDATE events
-                SET is_active = FALSE
-                WHERE event_id = :event_id
-            """),
-            {"event_id": event_id},
-        )
-
-    return redirect(url_for("events"))
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

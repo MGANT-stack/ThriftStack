@@ -44,9 +44,9 @@
             </select>
         </div>
 
-        <div class="form-row" id="quadrantRow" style="display:none;">
-            <label>Warehouse Quadrant</label>
-            <select name="warehouse_quadrant" id="quadrantSelect">
+        <div class="form-row" id="zoneRow" style="display:none;">
+            <label>Warehouse zone</label>
+            <select name="warehouse_zone" id="zoneSelect">
                 <option value="">Select</option>
                 <option value="A">A</option>
                 <option value="B">B</option>
@@ -71,24 +71,24 @@
 
 <script>
     const locationSelect = document.getElementById("locationSelect");
-    const quadrantRow = document.getElementById("quadrantRow");
-    const quadrantSelect = document.getElementById("quadrantSelect");
+    const zoneRow = document.getElementById("zoneRow");
+    const zoneSelect = document.getElementById("zoneSelect");
 
-    function toggleQuadrant() {
+    function togglezone() {
         const selected = locationSelect.options[locationSelect.selectedIndex];
         const locationName = selected ? selected.dataset.locationName : "";
 
         if (locationName === "Warehouse") {
-            quadrantRow.style.display = "flex";
-            quadrantSelect.required = true;
+            zoneRow.style.display = "flex";
+            zoneSelect.required = true;
         } else {
-            quadrantRow.style.display = "none";
-            quadrantSelect.required = false;
-            quadrantSelect.value = "";
+            zoneRow.style.display = "none";
+            zoneSelect.required = false;
+            zoneSelect.value = "";
         }
     }
 
-    locationSelect.addEventListener("change", toggleQuadrant);
-    toggleQuadrant();
+    locationSelect.addEventListener("change", togglezone);
+    togglezone();
 </script>
 {% endblock %}

@@ -11,50 +11,48 @@
         </div>
     </div>
 
-    <!-- Summary -->
     <div class="summary-row">
         <div class="summary-box">
             <h3>Active Events</h3>
-            <p>{{ event_summary.active_events if event_summary else 0 }}</p>
+            <p>{{ event_summary.active_events or 0 }}</p>
         </div>
         <div class="summary-box">
             <h3>Active Event Bins</h3>
-            <p>{{ event_summary.total_event_bins if event_summary else 0 }}</p>
+            <p>{{ event_summary.total_event_bins or 0 }}</p>
         </div>
     </div>
 
-    <!-- Event Table -->
-    {% if event_tallies %}
+    {% if events %}
         <div class="table-shell">
             <table>
                 <thead>
                     <tr>
                         <th>Event Name</th>
-                        <th>Start Date</th>
-                        <th>End Date</th>
+                        <th>Start</th>
+                        <th>End</th>
                         <th>Active</th>
                         <th>Active Bins</th>
                         <th>Archive</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for event in event_tallies %}
+                    {% for event in events %}
                     <tr>
                         <td>{{ event.event_name }}</td>
                         <td>{{ event.start_date or "" }}</td>
                         <td>{{ event.end_date or "" }}</td>
                         <td>{{ "Yes" if event.is_active else "No" }}</td>
-                        <td>{{ event.bins_assigned }}</td>
+                        <td>{{ event.bins_assigned or 0 }}</td>
                         <td>
                             <form method="post" action="{{ url_for('delete_event', event_id=event.event_id) }}">
                                 <button
                                     type="submit"
                                     {% if event.bins_assigned > 0 %}
                                         disabled
-                                        title="Cannot delete event with active bins"
+                                        title="Cannot archive event with active bins"
                                     {% endif %}
                                 >
-                                    Delete
+                                    Archive
                                 </button>
                             </form>
                         </td>

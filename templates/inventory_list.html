@@ -45,13 +45,14 @@
                 {% endfor %}
             </select>
 
-            <select name="warehouse_quadrant" id="bulkMoveQuadrant" style="display:none; max-width: 130px;">
-                <option value="">Quadrant</option>
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="D">D</option>
-            </select>
+            <select name="warehouse_zone" id="bulkMoveZone" style="display:none; max-width: 130px;">
+    <option value="">Zone</option>
+    <option value="A">Zone A</option>
+    <option value="B">Zone B</option>
+    <option value="C">Zone C</option>
+    <option value="D">Zone D</option>
+    <option value="E">Zone E</option>
+</select>
 
             <button type="submit" name="action" value="move">Move Selected</button>
         </div>
@@ -66,7 +67,7 @@
                                 <th>Category</th>
                                 <th>Purpose</th>
                                 <th>Location</th>
-                                <th>Quadrant</th>
+                                <th>Zone</th>
                                 <th>Event</th>
                                 <th>Status</th>
                                 <th>Date Added</th>
@@ -82,7 +83,7 @@
                             <td>{{ lot.category_name }}</td>
                             <td>{{ lot.purpose_name }}</td>
                             <td>{{ lot.location_name }}</td>
-                            <td>{{ lot.warehouse_quadrant or "" }}</td>
+                            <td>{{ lot.warehouse_zone or "" }}</td>
                             <td>{{ lot.event_name or "" }}</td>
                             <td>{{ lot.status }}</td>
                             <td>{{ lot.date_added }}</td>
@@ -99,24 +100,24 @@
 
 <script>
     const bulkMoveLocation = document.getElementById("bulkMoveLocation");
-    const bulkMoveQuadrant = document.getElementById("bulkMoveQuadrant");
+    const bulkMoveZone = document.getElementById("bulkMoveZone");
 
-    function toggleBulkQuadrant() {
+    function toggleBulkZone() {
         const selected = bulkMoveLocation.options[bulkMoveLocation.selectedIndex];
         const locationName = selected ? selected.dataset.locationName : "";
 
         if (locationName === "Warehouse") {
-            bulkMoveQuadrant.style.display = "inline-flex";
-            bulkMoveQuadrant.required = true;
+            bulkMoveZone.style.display = "inline-flex";
+            bulkMoveZone.required = true;
         } else {
-            bulkMoveQuadrant.style.display = "none";
-            bulkMoveQuadrant.required = false;
-            bulkMoveQuadrant.value = "";
+            bulkMoveZone.style.display = "none";
+            bulkMoveZone.required = false;
+            bulkMoveZone.value = "";
         }
     }
 
-    bulkMoveLocation.addEventListener("change", toggleBulkQuadrant);
-    toggleBulkQuadrant();
+    bulkMoveLocation.addEventListener("change", toggleBulkZone);
+    toggleBulkZone();
 </script>
 
 <script>

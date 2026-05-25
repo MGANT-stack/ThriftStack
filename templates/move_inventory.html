@@ -29,9 +29,9 @@
             </select>
         </div>
 
-        <div class="form-row" id="moveQuadrantRow" style="display:none;">
-            <label>Warehouse Quadrant</label>
-            <select name="warehouse_quadrant" id="moveQuadrantSelect">
+        <div class="form-row" id="moveZoneRow" style="display:none;">
+            <label>Warehouse Zone</label>
+            <select name="warehouse_Zone" id="moveZoneSelect">
                 <option value="">Select</option>
                 <option value="A">A</option>
                 <option value="B">B</option>
@@ -46,24 +46,24 @@
 
 <script>
     const moveLocationSelect = document.getElementById("moveLocationSelect");
-    const moveQuadrantRow = document.getElementById("moveQuadrantRow");
-    const moveQuadrantSelect = document.getElementById("moveQuadrantSelect");
+    const moveZoneRow = document.getElementById("moveZoneRow");
+    const moveZoneSelect = document.getElementById("moveZoneSelect");
 
-    function toggleMoveQuadrant() {
+    function toggleMoveZone() {
         const selected = moveLocationSelect.options[moveLocationSelect.selectedIndex];
         const locationName = selected ? selected.dataset.locationName : "";
 
         if (locationName === "Warehouse") {
-            moveQuadrantRow.style.display = "flex";
-            moveQuadrantSelect.required = true;
+            moveZoneRow.style.display = "flex";
+            moveZoneSelect.required = true;
         } else {
-            moveQuadrantRow.style.display = "none";
-            moveQuadrantSelect.required = false;
-            moveQuadrantSelect.value = "";
+            moveZoneRow.style.display = "none";
+            moveZoneSelect.required = false;
+            moveZoneSelect.value = "";
         }
     }
 
-    moveLocationSelect.addEventListener("change", toggleMoveQuadrant);
-    toggleMoveQuadrant();
+    moveLocationSelect.addEventListener("change", toggleMoveZone);
+    toggleMoveZone();
 </script>
 {% endblock %}

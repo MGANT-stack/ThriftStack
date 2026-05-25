@@ -34,7 +34,7 @@ INSERT INTO inventory_lots (
     category_id,
     storage_purpose_id,
     current_location_id,
-    warehouse_quadrant,
+    warehouse_zone,
     event_id,
     quantity_on_hand,
     status,
