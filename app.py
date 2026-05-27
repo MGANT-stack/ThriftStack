@@ -692,10 +692,12 @@ def upload_bins():
                     {"location_name": location_name},
                 )
 
-                if not category:
+                category_id = get_or_create_category(conn, category_name)
+
+                if not category_id:
                     skipped_count += 1
                     skipped_reasons.append(
-                        f"Row {row_number}: category '{category_name}' was not found."
+                        f"Row {row_number}: category '{category_name}' could not be created."
                     )
                     continue
 
