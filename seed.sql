@@ -17,5 +17,6 @@ INSERT INTO categories (category_name, department) VALUES
 ('Closet Staples', 'Clothing'),
 ('Fresh Fits', 'Clothing'),
 ('Boutique', 'Clothing'),
+(Boutique Accessories', 'Boutique'),
 ('Home/Office', 'Home'),
 ('Media', 'Media');
