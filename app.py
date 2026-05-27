@@ -2,6 +2,7 @@ import csv
 import os
 from datetime import timedelta
 from io import BytesIO, StringIO
+from unittest import result
 
 from flask import (
     Flask,
@@ -81,17 +82,14 @@ def generate_next_bin_number():
         row = fetch_one(
             conn,
             """
-            SELECT bin_number
+            SELECT COALESCE(MAX(CAST(bin_number AS INTEGER)), 0) AS max_bin
             FROM inventory_lots
-            ORDER BY CAST(bin_number AS INTEGER) DESC
-            LIMIT 1
+            WHERE bin_number ~ '^[0-9]+$'
             """
         )
 
-    if not row or not row["bin_number"]:
-        return "000001"
-
-    return f"{int(row['bin_number']) + 1:06d}"
+    next_number = int(row["max_bin"]) + 1 if row else 1
+    return f"{next_number:06d}"
 
 
 def get_location_name(conn, location_id):
@@ -168,40 +166,45 @@ def create_bin(conn, *, bin_number, category_id, storage_purpose_id, location_id
         raise ValueError("Warehouse zone is required for Warehouse bins.")
 
     result = conn.execute(
-        text(
-            """
-            INSERT INTO inventory_lots (
-                bin_number,
-                category_id,
-                storage_purpose_id,
-                current_location_id,
-                warehouse_zone,
-                event_id,
-                quantity_on_hand,
-                status
-            )
-            VALUES (
-                :bin_number,
-                :category_id,
-                :storage_purpose_id,
-                :current_location_id,
-                :warehouse_zone,
-                :event_id,
-                1,
-                'active'
-            )
-            RETURNING inventory_lot_id
-            """
-        ),
-        {
-            "bin_number": bin_number,
-            "category_id": category_id,
-            "storage_purpose_id": storage_purpose_id,
-            "current_location_id": location_id,
-            "warehouse_zone": warehouse_zone,
-            "event_id": event_id,
-        },
-    ).mappings().first()
+    text(
+        """
+        INSERT INTO inventory_lots (
+            bin_number,
+            category_id,
+            storage_purpose_id,
+            current_location_id,
+            warehouse_zone,
+            event_id,
+            quantity_on_hand,
+            status
+        )
+        VALUES (
+            :bin_number,
+            :category_id,
+            :storage_purpose_id,
+            :current_location_id,
+            :warehouse_zone,
+            :event_id,
+            1,
+            'active'
+        )
+        ON CONFLICT (bin_number) DO NOTHING
+        RETURNING inventory_lot_id
+        """
+    ),
+    {
+        "bin_number": bin_number,
+        "category_id": category_id,
+        "storage_purpose_id": storage_purpose_id,
+        "current_location_id": location_id,
+        "warehouse_zone": warehouse_zone,
+        "event_id": event_id,
+    },
+).mappings().first()
+
+    if not result:
+        raise ValueError(f"Bin {bin_number} already exists. Refresh and try again.")
+
 
     conn.execute(
         text(
@@ -582,28 +585,42 @@ def upload_bins():
         stream = StringIO(uploaded_file.stream.read().decode("utf-8-sig"))
         reader = csv.DictReader(stream)
 
-        required_columns = {
-            "bin_number",
-            "category",
-            "storage_purpose",
-            "location",
-            "warehouse_zone",
-            "event",
-        }
+        if not reader.fieldnames:
+            return "CSV is missing headers.", 400
 
-        if not required_columns.issubset(set(reader.fieldnames or [])):
-            return "CSV is missing required columns", 400
+        created_count = 0
+        skipped_count = 0
+        skipped_reasons = []
+
+        def clean(value):
+            return (value or "").strip()
+
+        def get_value(row, *keys):
+            for key in keys:
+                value = row.get(key)
+                if value is not None and str(value).strip() != "":
+                    return str(value).strip()
+            return ""
 
         with engine.begin() as conn:
-            for row in reader:
-                bin_number = (row.get("bin_number") or "").strip().zfill(6)
-                category_name = (row.get("category") or "").strip()
-                purpose_name = (row.get("storage_purpose") or "").strip()
-                location_name = (row.get("location") or "").strip()
-                zone = (row.get("warehouse_zone") or "").strip().upper()
-                event_name = (row.get("event") or "").strip()
+            for row_number, row in enumerate(reader, start=2):
+                raw_bin_number = get_value(row, "bin_number", "Bin Number", "Bin", "bin")
+                category_name = get_value(row, "category", "Category")
+                purpose_name = get_value(row, "storage_purpose", "Purpose", "purpose")
+                location_name = get_value(row, "location", "Location")
+                zone = get_value(row, "warehouse_zone", "Zone", "zone", "warehouse_quadrant").upper()
+                event_name = get_value(row, "event", "Event")
 
-                if not all([bin_number, category_name, purpose_name, location_name]):
+                if raw_bin_number:
+                    bin_number = raw_bin_number.zfill(6)
+                else:
+                    bin_number = generate_next_bin_number()
+
+                if not category_name or not purpose_name or not location_name:
+                    skipped_count += 1
+                    skipped_reasons.append(
+                        f"Row {row_number}: missing category, purpose, or location."
+                    )
                     continue
 
                 existing = fetch_one(
@@ -617,6 +634,10 @@ def upload_bins():
                 )
 
                 if existing:
+                    skipped_count += 1
+                    skipped_reasons.append(
+                        f"Row {row_number}: bin {bin_number} already exists."
+                    )
                     continue
 
                 category = fetch_one(
@@ -624,7 +645,7 @@ def upload_bins():
                     """
                     SELECT category_id
                     FROM categories
-                    WHERE category_name = :category_name
+                    WHERE LOWER(category_name) = LOWER(:category_name)
                     """,
                     {"category_name": category_name},
                 )
@@ -634,7 +655,7 @@ def upload_bins():
                     """
                     SELECT storage_purpose_id
                     FROM storage_purposes
-                    WHERE purpose_name = :purpose_name
+                    WHERE LOWER(purpose_name) = LOWER(:purpose_name)
                     """,
                     {"purpose_name": purpose_name},
                 )
@@ -644,13 +665,41 @@ def upload_bins():
                     """
                     SELECT location_id, location_name
                     FROM locations
-                    WHERE location_name = :location_name
+                    WHERE LOWER(location_name) = LOWER(:location_name)
                     """,
                     {"location_name": location_name},
                 )
 
-                if not category or not purpose or not location:
+                if not category:
+                    skipped_count += 1
+                    skipped_reasons.append(
+                        f"Row {row_number}: category '{category_name}' was not found."
+                    )
                     continue
+
+                if not purpose:
+                    skipped_count += 1
+                    skipped_reasons.append(
+                        f"Row {row_number}: purpose '{purpose_name}' was not found."
+                    )
+                    continue
+
+                if not location:
+                    skipped_count += 1
+                    skipped_reasons.append(
+                        f"Row {row_number}: location '{location_name}' was not found."
+                    )
+                    continue
+
+                if location["location_name"] == "Warehouse" and zone not in {"A", "B", "C", "D", "E"}:
+                    skipped_count += 1
+                    skipped_reasons.append(
+                        f"Row {row_number}: Warehouse bins require zone A, B, C, D, or E."
+                    )
+                    continue
+
+                if location["location_name"] != "Warehouse":
+                    zone = ""
 
                 event_id = get_or_create_event(conn, event_name)
 
@@ -665,13 +714,30 @@ def upload_bins():
                         zone=zone,
                         note=f"Bin {bin_number} uploaded from CSV",
                     )
-                except ValueError:
+                    created_count += 1
+
+                except ValueError as error:
+                    skipped_count += 1
+                    skipped_reasons.append(
+                        f"Row {row_number}: {str(error)}"
+                    )
                     continue
+
+        if skipped_reasons:
+            return (
+                "<h2>Upload Complete</h2>"
+                f"<p>Created: {created_count}</p>"
+                f"<p>Skipped: {skipped_count}</p>"
+                "<h3>Skipped Rows</h3>"
+                "<ul>"
+                + "".join(f"<li>{reason}</li>" for reason in skipped_reasons[:50])
+                + "</ul>"
+                "<p><a href='/inventory/list'>Back to Inventory</a></p>"
+            )
 
         return redirect(url_for("inventory_list"))
 
     return render_template("upload_bins.html")
-
 
 # ---------------------------------------------------------
 # EVENTS
