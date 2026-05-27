@@ -271,6 +271,36 @@ def get_or_create_event(conn, event_name):
 
     return event_result["event_id"]
 
+def get_or_create_category(conn, category_name):
+    category_name = (category_name or "").strip()
+    if not category_name:
+        return None
+
+    category = fetch_one(
+        conn,
+        """
+        SELECT category_id
+        FROM categories
+        WHERE LOWER(category_name) = LOWER(:category_name)
+        """,
+        {"category_name": category_name},
+    )
+
+    if category:
+        return category["category_id"]
+
+    result = conn.execute(
+        text(
+            """
+            INSERT INTO categories (category_name, department, is_active)
+            VALUES (:category_name, NULL, TRUE)
+            RETURNING category_id
+            """
+        ),
+        {"category_name": category_name},
+    ).mappings().first()
+
+    return result["category_id"]
 
 def get_active_inventory_summary():
     with get_connection() as conn:
@@ -640,15 +670,7 @@ def upload_bins():
                     )
                     continue
 
-                category = fetch_one(
-                    conn,
-                    """
-                    SELECT category_id
-                    FROM categories
-                    WHERE LOWER(category_name) = LOWER(:category_name)
-                    """,
-                    {"category_name": category_name},
-                )
+                category_id = get_or_create_category(conn, category_name)
 
                 purpose = fetch_one(
                     conn,
@@ -707,7 +729,7 @@ def upload_bins():
                     create_bin(
                         conn,
                         bin_number=bin_number,
-                        category_id=category["category_id"],
+                        category_id=category_id,
                         storage_purpose_id=purpose["storage_purpose_id"],
                         location_id=location["location_id"],
                         event_id=event_id,
