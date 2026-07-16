@@ -59,7 +59,27 @@
                 {% endfor %}
             </select>
         </div>
+        <div
+            id="quickWarehouseSnapshot"
+            class="warehouse-snapshot"
+            style="display: none;"
+        >
+            <p class="warehouse-snapshot-title">
+                Warehouse Count Snapshot
+            </p>
 
+            <div class="zone-count-grid">
+                {% for zone in ["A", "B", "C", "D", "E"] %}
+                    <div class="zone-count-item">
+                        <span class="zone-count-label">{{ zone }}</span>
+
+                        <span class="zone-count-value">
+                            {{ zone_counts[zone] }}/{{ zone_capacity }}
+                        </span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
         <div class="form-row" id="quickZoneRow" style="display:none;">
             <label>Warehouse Zone</label>
             <select name="warehouse_zone" id="quickZoneSelect">
@@ -91,22 +111,33 @@
     const quickLocationSelect = document.getElementById("quickLocationSelect");
     const quickZoneRow = document.getElementById("quickZoneRow");
     const quickZoneSelect = document.getElementById("quickZoneSelect");
+    const quickWarehouseSnapshot =
+    document.getElementById("quickWarehouseSnapshot");
 
-    function toggleQuickZone() {
-        const selected = quickLocationSelect.options[quickLocationSelect.selectedIndex];
-        const locationName = selected ? selected.dataset.locationName : "";
+    function toggleQuickWarehouseFields() {
+    const selectedOption =
+        quickLocationSelect.options[quickLocationSelect.selectedIndex];
 
-        if (locationName === "Warehouse") {
-            quickZoneRow.style.display = "flex";
-            quickZoneSelect.required = true;
-        } else {
-            quickZoneRow.style.display = "none";
-            quickZoneSelect.required = false;
-            quickZoneSelect.value = "";
-        }
+    const locationName =
+        selectedOption ? selectedOption.dataset.locationName : "";
+
+    const isWarehouse = locationName === "Warehouse";
+
+    quickZoneRow.style.display = isWarehouse ? "flex" : "none";
+    quickWarehouseSnapshot.style.display = isWarehouse ? "block" : "none";
+
+    quickZoneSelect.required = isWarehouse;
+
+    if (!isWarehouse) {
+        quickZoneSelect.value = "";
     }
+}
 
-    quickLocationSelect.addEventListener("change", toggleQuickZone);
-    toggleQuickZone();
+quickLocationSelect.addEventListener(
+    "change",
+    toggleQuickWarehouseFields
+);
+
+toggleQuickWarehouseFields();
 </script>
 {% endblock %}

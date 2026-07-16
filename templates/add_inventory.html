@@ -44,6 +44,21 @@
             </select>
         </div>
 
+        <div id="warehouseSnapshot" class="warehouse-snapshot" style="display: none;">
+            <p class="warehouse-snapshot-title">Warehouse Count Snapshot</p>
+
+            <div class="zone-count-grid">
+                {% for zone in ["A", "B", "C", "D", "E"] %}
+                    <div class="zone-count-item">
+                        <span class="zone-count-label">{{ zone }}</span>
+                        <span class="zone-count-value">
+                            {{ zone_counts[zone] }}/{{ zone_capacity }}
+                        </span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
         <div class="form-row" id="zoneRow" style="display:none;">
             <label>Warehouse zone</label>
             <select name="warehouse_zone" id="zoneSelect">
@@ -73,22 +88,28 @@
     const locationSelect = document.getElementById("locationSelect");
     const zoneRow = document.getElementById("zoneRow");
     const zoneSelect = document.getElementById("zoneSelect");
+    const warehouseSnapshot = document.getElementById("warehouseSnapshot");
 
-    function togglezone() {
-        const selected = locationSelect.options[locationSelect.selectedIndex];
-        const locationName = selected ? selected.dataset.locationName : "";
+    function toggleWarehouseFields() {
+    const selectedOption =
+        locationSelect.options[locationSelect.selectedIndex];
 
-        if (locationName === "Warehouse") {
-            zoneRow.style.display = "flex";
-            zoneSelect.required = true;
-        } else {
-            zoneRow.style.display = "none";
-            zoneSelect.required = false;
-            zoneSelect.value = "";
-        }
+    const locationName =
+        selectedOption ? selectedOption.dataset.locationName : "";
+
+    const isWarehouse = locationName === "Warehouse";
+
+    zoneRow.style.display = isWarehouse ? "flex" : "none";
+    warehouseSnapshot.style.display = isWarehouse ? "block" : "none";
+
+    zoneSelect.required = isWarehouse;
+
+    if (!isWarehouse) {
+        zoneSelect.value = "";
     }
+}
 
-    locationSelect.addEventListener("change", togglezone);
-    togglezone();
+locationSelect.addEventListener("change", toggleWarehouseFields);
+toggleWarehouseFields();
 </script>
 {% endblock %}

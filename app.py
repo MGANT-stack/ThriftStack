@@ -441,6 +441,37 @@ def apply_inventory_action(conn, selected_ids, action, to_location_id=None, ware
                 },
             )
 
+ZONE_CAPACITY = 35
+
+
+def get_warehouse_zone_counts():
+    with get_connection() as conn:
+        rows = fetch_all(
+            conn,
+            """
+            SELECT
+                il.warehouse_zone,
+                COUNT(*) AS total
+            FROM inventory_lots il
+            JOIN locations l
+                ON il.current_location_id = l.location_id
+            WHERE il.status = 'active'
+              AND l.location_name = 'Warehouse'
+              AND il.warehouse_zone IS NOT NULL
+            GROUP BY il.warehouse_zone
+            ORDER BY il.warehouse_zone
+            """
+        )
+
+    counts = {zone: 0 for zone in ["A", "B", "C", "D", "E"]}
+
+    for row in rows:
+        zone = row["warehouse_zone"]
+
+        if zone in counts:
+            counts[zone] = row["total"]
+
+    return counts
 
 # ---------------------------------------------------------
 # DASHBOARD
@@ -449,6 +480,7 @@ def apply_inventory_action(conn, selected_ids, action, to_location_id=None, ware
 @app.route("/")
 def dashboard():
     categories, purposes, locations, events = get_lookup_data()
+    zone_counts = get_warehouse_zone_counts()
 
     return render_template(
         "dashboard.html",
@@ -458,6 +490,8 @@ def dashboard():
         storage_purposes=purposes,
         locations=locations,
         events=events,
+        zone_counts=zone_counts,
+        zone_capacity=ZONE_CAPACITY,
     )
 
 
@@ -593,15 +627,18 @@ def add_inventory():
         return redirect(url_for("inventory_list"))
 
     categories, purposes, locations, events = get_lookup_data()
+    zone_counts = get_warehouse_zone_counts()
 
     return render_template(
-        "add_inventory.html",
-        next_bin_number=generate_next_bin_number(),
-        categories=categories,
-        storage_purposes=purposes,
-        locations=locations,
-        events=events,
-    )
+            "add_inventory.html",
+            next_bin_number=generate_next_bin_number(),
+            categories=categories,
+            storage_purposes=purposes,
+            locations=locations,
+            events=events,
+            zone_counts=zone_counts,
+            zone_capacity=ZONE_CAPACITY,
+        )
 
 
 @app.route("/inventory/upload", methods=["GET", "POST"])

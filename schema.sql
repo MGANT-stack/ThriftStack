@@ -84,3 +84,4 @@ CREATE INDEX idx_inventory_lots_Zone
 
 CREATE INDEX idx_inventory_transactions_lot
     ON inventory_transactions(inventory_lot_id);
+
